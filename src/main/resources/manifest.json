@@ -1,20 +1,20 @@
 {
-  "Group": "dev.hytalemodding",
-  "Name": "ExamplePlugin",
+  "Group": "dev.JackOtsig",
+  "Name": "HungerGames",
   "Version": "1.0.0",
-  "Description": "Description of your plugin",
+  "Description": "a hytale hunger games plugin",
   "Authors": [
     {
-      "Name": "Your Name",
-      "Email": "your.email@example.com",
-      "Url": "https://your-website.com"
+      "Name": "Jack Otsig",
+      "Email": "jackotsig@gmail.com",
+      "Url": "https://github.com/JackOtsig"
     }
   ],
-  "Website": "https://your-plugin-website.com",
-  "ServerVersion": "*",
+  "Website": "https://github.com/JackOtsig",
+  "ServerVersion": "0.1",
   "Dependencies": {},
   "OptionalDependencies": {},
   "DisabledByDefault": false,
   "IncludesAssetPack": false,
-  "Main": "dev.hytalemodding.ExamplePlugin"
+  "Main": "dev.jackOtsig.HungerGames"
 }
