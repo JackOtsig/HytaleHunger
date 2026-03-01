@@ -2,7 +2,6 @@ package dev.jackOtsig;
 
 import com.hypixel.hytale.server.core.entity.entities.Player;
 
-import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /** Holds per-player state for the duration of a game. */
@@ -16,9 +15,7 @@ public class PlayerData {
 
     public PlayerData(Player player) {
         this.player = player;
-        // TODO: use player.getUniqueId() once available — Hytale API unknown
-        this.uuid = UUID.nameUUIDFromBytes(
-                player.getDisplayName().getBytes(StandardCharsets.UTF_8));
+        this.uuid = player.getUuid(); // Player implements CommandSender which has getUuid()
         this.kills = 0;
         this.alive = true;
         this.secondsOutsideBorder = 0;

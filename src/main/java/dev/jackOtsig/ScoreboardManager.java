@@ -1,16 +1,42 @@
 package dev.jackOtsig;
 
+import dev.jackOtsig.hud.GameHud;
+
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Manages the in-game HUD: alive count, elapsed time, and kill leaderboard.
+ * Manages per-player {@link GameHud} instances.
  *
- * Actual scoreboard/HUD rendering is stubbed — Hytale scoreboard API unknown.
+ * Each player gets a HUD shown on join and hidden/cleared on game end.
  */
 public class ScoreboardManager {
+
+    /** Active HUDs keyed by player UUID. */
+    private final Map<UUID, GameHud> huds = new LinkedHashMap<>();
+
+    /**
+     * Creates and shows a HUD for the given player.
+     * Called from GameManager when a player joins a game session.
+     */
+    public void addPlayer(PlayerData pd) {
+        GameHud hud = new GameHud(pd.getPlayer().getPlayerRef());
+        hud.show();
+        huds.put(pd.getUuid(), hud);
+    }
+
+    /**
+     * Removes and stops updating the HUD for a player (e.g. when they are
+     * eliminated and switched to spectator).
+     */
+    public void removePlayer(UUID uuid) {
+        huds.remove(uuid);
+    }
 
     /** Called every second during ACTIVE state. */
     public void onSecondTick(int activeSeconds, int aliveCount, Collection<PlayerData> players) {
@@ -20,25 +46,31 @@ public class ScoreboardManager {
                 .limit(5)
                 .collect(Collectors.toList());
 
-        updateScoreboard(timeStr, aliveCount, topKillers);
+        for (GameHud hud : huds.values()) {
+            hud.setData(timeStr, aliveCount, topKillers);
+            hud.refresh();
+        }
     }
 
-    /** Clears the scoreboard at the end of a game. */
+    /**
+     * Switches all active HUDs to display the winner screen, then clears the map.
+     * Pass {@code null} to show a "no winner" message.
+     */
+    public void showWinner(String winnerName) {
+        String display = winnerName != null ? winnerName : "Nobody";
+        for (GameHud hud : huds.values()) {
+            hud.setWinner(display);
+            hud.refresh();
+        }
+        huds.clear();
+    }
+
+    /** Clears all HUDs without showing a winner (e.g. on hard reset). */
     public void clearScoreboard() {
-        // TODO: Remove HUD / scoreboard from all players — Hytale API unknown
+        huds.clear();
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
-
-    private void updateScoreboard(String time, int aliveCount, List<PlayerData> topKillers) {
-        // TODO: Push HUD lines to players via Hytale scoreboard/HUD API — Hytale API unknown
-        // Suggested layout:
-        //   "§eHunger Games"
-        //   "§7Time: §f" + time
-        //   "§7Alive: §f" + aliveCount
-        //   "§7── Top Kills ──"
-        //   ... topKillers: "§f" + name + " §7(" + kills + ")"
-    }
 
     private String formatTime(int totalSeconds) {
         int minutes = totalSeconds / 60;

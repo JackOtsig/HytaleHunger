@@ -3,7 +3,6 @@ package dev.jackOtsig;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 
-import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -31,9 +30,7 @@ public class VoteManager {
             return;
         }
 
-        // TODO: use player.getUniqueId() — Hytale API unknown
-        UUID id = UUID.nameUUIDFromBytes(
-                player.getDisplayName().getBytes(StandardCharsets.UTF_8));
+        UUID id = player.getUuid();
 
         if (voters.contains(id)) {
             player.sendMessage(Message.raw("You have already voted."));

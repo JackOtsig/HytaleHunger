@@ -7,7 +7,6 @@ import com.hypixel.hytale.server.core.entity.entities.Player;
 import dev.jackOtsig.VoteManager;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -24,17 +23,13 @@ public class VoteStartCommand extends AbstractCommand {
         this.voteManager = voteManager;
     }
 
-    @Nullable
     @Override
     protected CompletableFuture<Void> execute(@Nonnull CommandContext context) {
-        // TODO: context.getPlayer() — Hytale API unknown
-        // The cast below assumes CommandContext exposes the player sender somehow.
-        // Replace with the actual API once known.
-        Player player = null; // TODO: extract player from context — Hytale API unknown
-        if (player == null) {
+        if (!context.isPlayer()) {
             context.sendMessage(Message.raw("This command can only be used by players."));
             return CompletableFuture.completedFuture(null);
         }
+        Player player = context.senderAs(Player.class);
         voteManager.registerVote(player);
         return CompletableFuture.completedFuture(null);
     }

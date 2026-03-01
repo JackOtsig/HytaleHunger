@@ -1,10 +1,13 @@
 package dev.jackOtsig;
 
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.protocol.GameMode;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.jackOtsig.map.MapManager;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -30,16 +33,33 @@ public class GameManager {
     private int aliveCount = 0;
 
     // Counters used inside tick methods
-    private int votingSecondsLeft = 0;
+    private int votingSecondsLeft  = 0;
     private int preStartSecondsLeft = 0;
-    private int activeSeconds = 0;
-    private int endedSecondsLeft = 0;
+    private int activeSeconds      = 0;
+    private int endedSecondsLeft   = 0;
+
+    /**
+     * Cached EntityStore obtained from WorldInitSystem (or PlayerDeathSystem) on
+     * first entity addition. Used to schedule ECS operations from the scheduler thread.
+     * Volatile for visibility across threads.
+     */
+    private volatile EntityStore entityStore;
 
     public GameManager() {
-        this.barrierManager = new BarrierManager();
+        this.barrierManager    = new BarrierManager();
         this.scoreboardManager = new ScoreboardManager();
-        this.voteManager = new VoteManager(this);
-        this.mapManager = new MapManager();
+        this.voteManager       = new VoteManager(this);
+        this.mapManager        = new MapManager();
+    }
+
+    /**
+     * Called by WorldInitSystem / PlayerDeathSystem when the EntityStore is first available.
+     * Idempotent — only stores on the first call.
+     */
+    public void initEntityStore(EntityStore entityStore) {
+        if (this.entityStore == null) {
+            this.entityStore = entityStore;
+        }
     }
 
     // ── Tick dispatch ─────────────────────────────────────────────────────────
@@ -72,7 +92,7 @@ public class GameManager {
         mapManager.generateMap();
         mapManager.spawnCornucopiaChests();
         mapManager.spawnFieldChests();
-        mapManager.placeSpawnPositions(players.values());
+        mapManager.placeSpawnPositions(players.values(), entityStore);
         freezeAllPlayers(true);
         broadcast("All players have been teleported! Game begins in "
                 + preStartSecondsLeft + " seconds!");
@@ -82,8 +102,14 @@ public class GameManager {
     private void transitionToActive() {
         state = GameState.ACTIVE;
         activeSeconds = 0;
-        freezeAllPlayers(false);
         barrierManager.reset();
+
+        // Show HUD for all players at game start.
+        for (PlayerData pd : players.values()) {
+            scoreboardManager.addPlayer(pd);
+        }
+
+        freezeAllPlayers(false);
         broadcast("The Hunger Games have begun! May the odds be ever in your favor.");
         HungerGames.LOGGER.atInfo().log("Entering ACTIVE with " + aliveCount + " players");
     }
@@ -91,16 +117,16 @@ public class GameManager {
     private void transitionToEnded(PlayerData winner) {
         state = GameState.ENDED;
         endedSecondsLeft = GameConstants.END_RESET_DELAY_SECONDS;
-        scoreboardManager.clearScoreboard();
 
+        String winnerName = null;
         if (winner != null) {
-            String name = winner.getDisplayName();
-            broadcast("§6" + name + " §ewins the Hunger Games with "
+            winnerName = winner.getDisplayName();
+            broadcast("§6" + winnerName + " §ewins the Hunger Games with "
                     + winner.getKills() + " kill(s)!");
-            showWinnerTitle(winner.getPlayer(), name);
         } else {
             broadcast("Everyone is dead. No winner this round.");
         }
+        scoreboardManager.showWinner(winnerName);
         HungerGames.LOGGER.atInfo().log("Entering ENDED — winner: "
                 + (winner != null ? winner.getDisplayName() : "none"));
     }
@@ -128,7 +154,7 @@ public class GameManager {
     private void tickActive() {
         activeSeconds++;
         Collection<PlayerData> alive = getAlivePlayers();
-        barrierManager.onSecondTick(alive);
+        barrierManager.onSecondTick(alive, entityStore);
         scoreboardManager.onSecondTick(activeSeconds, aliveCount, players.values());
     }
 
@@ -144,10 +170,17 @@ public class GameManager {
     /** Called by PlayerJoinHandler when a player connects. */
     public void onPlayerJoin(Player player) {
         if (state != GameState.WAITING) {
-            // TODO: Put late-joining players into spectator mode — Hytale API unknown
+            // Late-joining players go into Creative mode via world.execute() so ECS ops
+            // run on the world thread. We schedule using the cached EntityStore.
+            EntityStore es = this.entityStore;
+            if (es != null) {
+                Ref<EntityStore> ref = player.getPlayerRef().getReference();
+                es.getWorld().execute(() ->
+                        Player.setGameMode(ref, GameMode.Creative, es.getStore()));
+            }
             return;
         }
-        UUID id = toUuid(player);
+        UUID id = player.getUuid();
         if (players.containsKey(id)) return;
 
         PlayerData pd = new PlayerData(player);
@@ -162,13 +195,17 @@ public class GameManager {
     }
 
     /**
-     * Called by the death event handler when a player dies.
+     * Called by PlayerDeathSystem when a player's DeathComponent is added.
+     * Runs on the ECS world thread — store operations are safe to call directly.
      *
-     * @param victim the player who died
-     * @param killer the player who delivered the killing blow (may be null)
+     * @param victim    the player who died
+     * @param killer    the player who delivered the killing blow (may be null)
+     * @param victimRef the ECS ref of the victim
+     * @param store     the current EntityStore accessor
      */
-    public void onPlayerDeath(Player victim, Player killer) {
-        PlayerData victimData = players.get(toUuid(victim));
+    public void onPlayerDeath(Player victim, Player killer,
+                               Ref<EntityStore> victimRef, Store<EntityStore> store) {
+        PlayerData victimData = players.get(victim.getUuid());
         if (victimData == null || !victimData.isAlive()) return;
 
         victimData.setAlive(false);
@@ -177,7 +214,7 @@ public class GameManager {
         barrierManager.onPlayerEliminated();
 
         if (killer != null) {
-            PlayerData killerData = players.get(toUuid(killer));
+            PlayerData killerData = players.get(killer.getUuid());
             if (killerData != null) {
                 killerData.incrementKills();
                 broadcast(killerData.getDisplayName() + " eliminated "
@@ -189,7 +226,7 @@ public class GameManager {
                     + aliveCount + " players remaining)");
         }
 
-        setSpectator(victim);
+        setSpectator(victim, victimRef, store);
         checkWinCondition();
     }
 
@@ -211,11 +248,11 @@ public class GameManager {
     /** Clears all state and returns to WAITING. */
     public void resetGame() {
         players.clear();
-        aliveCount = 0;
-        activeSeconds = 0;
+        aliveCount        = 0;
+        activeSeconds     = 0;
         votingSecondsLeft = 0;
         preStartSecondsLeft = 0;
-        endedSecondsLeft = 0;
+        endedSecondsLeft  = 0;
         voteManager.reset();
         barrierManager.reset();
         scoreboardManager.clearScoreboard();
@@ -225,9 +262,9 @@ public class GameManager {
 
     // ── Accessors used by sub-managers ────────────────────────────────────────
 
-    public GameState getState() { return state; }
-    public int getPlayerCount() { return players.size(); }
-    public VoteManager getVoteManager() { return voteManager; }
+    public GameState getState()               { return state; }
+    public int       getPlayerCount()         { return players.size(); }
+    public VoteManager getVoteManager()       { return voteManager; }
 
     /** Broadcasts a message to every player currently in the game. */
     public void broadcast(String message) {
@@ -244,23 +281,40 @@ public class GameManager {
                 .toList();
     }
 
-    private void freezeAllPlayers(boolean frozen) {
+    /**
+     * Switches a dead player to Creative mode (no Spectator in Hytale) and hides
+     * them from all living players.
+     * Called from PlayerDeathSystem — already on the world thread, store is valid.
+     */
+    private void setSpectator(Player victim, Ref<EntityStore> victimRef, Store<EntityStore> store) {
+        // Switch to Creative so the dead player can't interact with the world.
+        Player.setGameMode(victimRef, GameMode.Creative, store);
+
+        // Hide the dead player from all currently-alive players.
+        UUID victimUuid = victim.getUuid();
         for (PlayerData pd : players.values()) {
-            // TODO: Freeze / unfreeze player movement — Hytale API unknown
+            if (pd.isAlive()) {
+                pd.getPlayer().getPlayerRef().getHiddenPlayersManager().hidePlayer(victimUuid);
+            }
         }
     }
 
-    private void setSpectator(Player player) {
-        // TODO: Set player to spectator mode and make invisible — Hytale API unknown
-    }
-
-    private void showWinnerTitle(Player winner, String name) {
-        // TODO: Show title / popup overlay to all players — Hytale API unknown
-    }
-
-    private UUID toUuid(Player player) {
-        // TODO: use player.getUniqueId() — Hytale API unknown
-        return UUID.nameUUIDFromBytes(
-                player.getDisplayName().getBytes(StandardCharsets.UTF_8));
+    /**
+     * Freezes or unfreezes all players.
+     * Runs via world.execute() because it's called from the scheduler thread.
+     *
+     * TODO: MovementManager freeze API is not yet confirmed — implement once known.
+     */
+    private void freezeAllPlayers(boolean frozen) {
+        EntityStore es = this.entityStore;
+        if (es == null) return;
+        es.getWorld().execute(() -> {
+            // Store<EntityStore> store = es.getStore();
+            // for (PlayerData pd : players.values()) {
+            //     Ref<EntityStore> ref = pd.getPlayer().getPlayerRef().getReference();
+            //     MovementManager mm = store.getComponent(ref, MovementManager.getComponentType());
+            //     if (mm != null) { mm.setFrozen(frozen); }  // method name TBD
+            // }
+        });
     }
 }
