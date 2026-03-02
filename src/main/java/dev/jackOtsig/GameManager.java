@@ -78,6 +78,24 @@ public class GameManager {
 
     // ── State transitions ─────────────────────────────────────────────────────
 
+    /**
+     * Admin shortcut — immediately begins PRE_START regardless of player count.
+     * Requires at least 2 players and WAITING state.
+     *
+     * @return null on success, or an error message to show the caller
+     */
+    public String forceStart() {
+        if (state != GameState.WAITING) {
+            return "Cannot force-start: game is already in " + state + " state.";
+        }
+        if (players.size() < 2) {
+            return "Cannot force-start: need at least 2 players (have " + players.size() + ").";
+        }
+        HungerGames.LOGGER.atInfo().log("Force-start triggered by admin");
+        transitionToPreStart();
+        return null;
+    }
+
     /** Called when >50% of players have voted /votestart. */
     public void onVoteThresholdReached() {
         if (state != GameState.WAITING) return;
