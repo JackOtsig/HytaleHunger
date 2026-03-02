@@ -13,6 +13,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.jackOtsig.map.MapManager;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -207,12 +208,15 @@ public class GameManager {
         players.put(id, pd);
         aliveCount.incrementAndGet();
 
-        // Keep joining players invulnerable until the game starts.
+        // Set Adventure mode and make invulnerable until the game starts.
         EntityStore es = this.entityStore;
         if (es != null) {
             Ref<EntityStore> ref = player.getReference();
-            es.getWorld().execute(() ->
-                    es.getStore().addComponent(ref, Invulnerable.getComponentType(), Invulnerable.INSTANCE));
+            es.getWorld().execute(() -> {
+                Store<EntityStore> store = es.getStore();
+                Player.setGameMode(ref, GameMode.Adventure, store);
+                store.addComponent(ref, Invulnerable.getComponentType(), Invulnerable.INSTANCE);
+            });
         }
         broadcast(player.getDisplayName() + " joined! ("
                 + players.size() + "/" + GameConstants.MAX_PLAYERS + ")");
@@ -277,6 +281,20 @@ public class GameManager {
 
     /** Clears all state and returns to WAITING. */
     public void resetGame() {
+        // Restore all players to Adventure mode so they can participate in the next round.
+        // Capture refs before clearing the map so the lambda has a stable snapshot.
+        EntityStore es = this.entityStore;
+        if (es != null) {
+            List<Ref<EntityStore>> refs = players.values().stream()
+                    .map(pd -> pd.getPlayer().getReference())
+                    .toList();
+            es.getWorld().execute(() -> {
+                Store<EntityStore> store = es.getStore();
+                for (Ref<EntityStore> ref : refs) {
+                    Player.setGameMode(ref, GameMode.Adventure, store);
+                }
+            });
+        }
         players.clear();
         aliveCount.set(0);
         activeSeconds     = 0;
@@ -389,6 +407,7 @@ public class GameManager {
                 } else {
                     store.removeComponentIfExists(ref, Frozen.getComponentType());
                     store.removeComponentIfExists(ref, Invulnerable.getComponentType());
+                    Player.setGameMode(ref, GameMode.Adventure, store);
                     scoreboardManager.addPlayer(pd, store);
                 }
             }
