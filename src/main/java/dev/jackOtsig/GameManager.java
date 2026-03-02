@@ -289,6 +289,43 @@ public class GameManager {
     public int       getPlayerCount()         { return players.size(); }
     public VoteManager getVoteManager()       { return voteManager; }
 
+    /** Returns a multi-line status string suitable for an admin command. */
+    public String getStatus() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("§e=== Hunger Games Status ===\n");
+        sb.append("§7State: §f").append(state).append("\n");
+        sb.append("§7Players: §f").append(players.size()).append(" / ")
+          .append(GameConstants.MAX_PLAYERS);
+
+        switch (state) {
+            case WAITING -> {
+                int votes = voteManager.getVoteCount();
+                int needed = (int) Math.ceil(players.size() * GameConstants.VOTE_START_THRESHOLD);
+                sb.append("\n§7Votes: §f").append(votes).append(" / ").append(needed);
+            }
+            case VOTING ->
+                sb.append("\n§7Voting ends in: §f").append(votingSecondsLeft).append("s");
+            case PRE_START ->
+                sb.append("\n§7Game starts in: §f").append(preStartSecondsLeft).append("s");
+            case ACTIVE -> {
+                int minutes = activeSeconds / 60;
+                int seconds = activeSeconds % 60;
+                sb.append("\n§7Alive: §f").append(aliveCount.get());
+                sb.append("\n§7Time: §f").append(String.format("%02d:%02d", minutes, seconds));
+                sb.append("\n§7Border radius: §f")
+                  .append(String.format("%.1f", barrierManager.getCurrentRadius())).append(" tiles");
+            }
+            case ENDED ->
+                sb.append("\n§7Resetting in: §f").append(endedSecondsLeft).append("s");
+        }
+
+        sb.append("\n§7Center: §f(")
+          .append(String.format("%.1f, %.1f, %.1f",
+                  GameConstants.CENTER_X, GameConstants.CENTER_Y, GameConstants.CENTER_Z))
+          .append(")");
+        return sb.toString();
+    }
+
     /** Broadcasts a message to every player currently in the game. */
     public void broadcast(String message) {
         for (PlayerData pd : players.values()) {
