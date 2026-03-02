@@ -4,6 +4,7 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.GameMode;
 import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.entity.Frozen;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.jackOtsig.map.MapManager;
@@ -90,8 +91,8 @@ public class GameManager {
         state = GameState.PRE_START;
         preStartSecondsLeft = GameConstants.PRE_START_FREEZE_SECONDS;
         mapManager.generateMap();
-        mapManager.spawnCornucopiaChests();
-        mapManager.spawnFieldChests();
+        mapManager.spawnCornucopiaChests(entityStore);
+        mapManager.spawnFieldChests(entityStore);
         mapManager.placeSpawnPositions(players.values(), entityStore);
         freezeAllPlayers(true);
         broadcast("All players have been teleported! Game begins in "
@@ -300,21 +301,22 @@ public class GameManager {
     }
 
     /**
-     * Freezes or unfreezes all players.
+     * Freezes or unfreezes all players using the Frozen marker component.
      * Runs via world.execute() because it's called from the scheduler thread.
-     *
-     * TODO: MovementManager freeze API is not yet confirmed — implement once known.
      */
-    private void freezeAllPlayers(boolean frozen) {
+    private void freezeAllPlayers(boolean freeze) {
         EntityStore es = this.entityStore;
         if (es == null) return;
         es.getWorld().execute(() -> {
-            // Store<EntityStore> store = es.getStore();
-            // for (PlayerData pd : players.values()) {
-            //     Ref<EntityStore> ref = pd.getPlayer().getPlayerRef().getReference();
-            //     MovementManager mm = store.getComponent(ref, MovementManager.getComponentType());
-            //     if (mm != null) { mm.setFrozen(frozen); }  // method name TBD
-            // }
+            Store<EntityStore> store = es.getStore();
+            for (PlayerData pd : players.values()) {
+                Ref<EntityStore> ref = pd.getPlayer().getPlayerRef().getReference();
+                if (freeze) {
+                    store.addComponent(ref, Frozen.getComponentType(), Frozen.get());
+                } else {
+                    store.removeComponentIfExists(ref, Frozen.getComponentType());
+                }
+            }
         });
     }
 }

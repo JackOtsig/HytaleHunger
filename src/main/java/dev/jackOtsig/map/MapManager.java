@@ -4,10 +4,15 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.math.vector.Vector3f;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.inventory.ItemStack;
+import com.hypixel.hytale.server.core.inventory.container.SimpleItemContainer;
 import com.hypixel.hytale.server.core.modules.entity.teleport.PendingTeleport;
 import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
+import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.meta.state.ItemContainerState;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.jackOtsig.GameConstants;
+import dev.jackOtsig.HungerGames;
 import dev.jackOtsig.PlayerData;
 import dev.jackOtsig.loot.ItemTier;
 import dev.jackOtsig.loot.LootTable;
@@ -21,6 +26,11 @@ import java.util.Random;
  */
 public class MapManager {
 
+    /** Block type key for field chests (small crude chest). */
+    private static final String CHEST_FIELD       = "Furniture_Crude_Chest_Small";
+    /** Block type key for cornucopia chests (large epic chest). */
+    private static final String CHEST_CORNUCOPIA  = "Furniture_Dungeon_Chest_Epic";
+
     private static final Random RNG = new Random();
 
     /** World center (tile) coordinates — assumed 0,0 for now. */
@@ -32,7 +42,7 @@ public class MapManager {
 
     /** Generates the map terrain around the center point. */
     public void generateMap() {
-        // TODO: Generate terrain using Hytale world/terrain API — Hytale API unknown
+        // TODO: Generate terrain using Hytale world/terrain API — API unknown
     }
 
     /**
@@ -58,17 +68,19 @@ public class MapManager {
     }
 
     /** Spawns CORNUCOPIA_CHEST_COUNT chests in a tight cluster at the center. */
-    public void spawnCornucopiaChests() {
+    public void spawnCornucopiaChests(EntityStore entityStore) {
+        if (entityStore == null) return;
         for (int i = 0; i < GameConstants.CORNUCOPIA_CHEST_COUNT; i++) {
             double ox = (RNG.nextDouble() * 6) - 3;
             double oz = (RNG.nextDouble() * 6) - 3;
             List<String> items = lootTable.rollChest(ItemTier.CORNUCOPIA);
-            spawnChest(CENTER_X + ox, CENTER_Y, CENTER_Z + oz, items);
+            spawnChest(CENTER_X + ox, CENTER_Y, CENTER_Z + oz, CHEST_CORNUCOPIA, items, entityStore);
         }
     }
 
     /** Spawns FIELD_CHEST_COUNT chests randomly across the map. */
-    public void spawnFieldChests() {
+    public void spawnFieldChests(EntityStore entityStore) {
+        if (entityStore == null) return;
         double r = GameConstants.INITIAL_BORDER_RADIUS;
         for (int i = 0; i < GameConstants.FIELD_CHEST_COUNT; i++) {
             double angle = RNG.nextDouble() * 2 * Math.PI;
@@ -76,7 +88,7 @@ public class MapManager {
             double x = CENTER_X + dist * Math.cos(angle);
             double z = CENTER_Z + dist * Math.sin(angle);
             List<String> items = lootTable.rollChest(ItemTier.FIELD);
-            spawnChest(x, CENTER_Y, z, items);
+            spawnChest(x, CENTER_Y, z, CHEST_FIELD, items, entityStore);
         }
     }
 
@@ -96,8 +108,40 @@ public class MapManager {
                 new Vector3f(0, yaw, 0)));  // pitch=0, yaw=yaw, roll=0
     }
 
-    private void spawnChest(double x, double y, double z, List<String> itemIds) {
-        // TODO: Place a chest block at (x, y, z) — Hytale block-placement API unknown
-        // TODO: Insert itemIds into the chest inventory — Hytale item API unknown
+    /**
+     * Places a chest block at (x, y, z) and fills it with the given items.
+     * Block ops run on the world thread via {@code world.execute()}.
+     *
+     * @param blockTypeKey {@link #CHEST_FIELD} or {@link #CHEST_CORNUCOPIA}
+     * @param itemIds      item ID strings from {@code LootTable.rollChest()}
+     */
+    private void spawnChest(double x, double y, double z,
+                             String blockTypeKey, List<String> itemIds,
+                             EntityStore entityStore) {
+        int bx = (int) Math.floor(x);
+        int by = (int) Math.floor(y);
+        int bz = (int) Math.floor(z);
+
+        entityStore.getWorld().execute(() -> {
+            World world = entityStore.getWorld();
+
+            // Place the chest block (rotation 0 = default facing).
+            world.setBlock(bx, by, bz, blockTypeKey, 0);
+
+            // Retrieve the block state — true: initialise/load if not yet present.
+            if (!(world.getState(bx, by, bz, true) instanceof ItemContainerState ics)) {
+                HungerGames.LOGGER.atWarning().log(
+                        "spawnChest: no ItemContainerState at " + bx + "," + by + "," + bz
+                        + " for block " + blockTypeKey);
+                return;
+            }
+
+            // Build a fresh container and fill each slot.
+            SimpleItemContainer container = new SimpleItemContainer((short) itemIds.size());
+            for (int i = 0; i < itemIds.size(); i++) {
+                container.setItemStackForSlot((short) i, new ItemStack(itemIds.get(i), 1), false);
+            }
+            ics.setItemContainer(container);
+        });
     }
 }
