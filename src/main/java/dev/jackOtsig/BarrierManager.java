@@ -19,9 +19,15 @@ import java.util.Collection;
  */
 public class BarrierManager {
 
-    /** Approximate number of particles to place around the border ring each tick. */
-    private static final int BORDER_PARTICLE_COUNT = 120;
-    /** Particle effect ID used for the border ring visual. */
+    /** Horizontal distance (tiles) between consecutive particle spawn points on the ring. */
+    private static final double BORDER_PARTICLE_H_SPACING = 8.0;
+    /** Vertical step (tiles) between particle spawn points along the wall height. */
+    private static final int    BORDER_PARTICLE_Y_STEP    = 2;
+    /** Lowest particle Y offset relative to CENTER_Y (negative = below ground level). */
+    private static final int    BORDER_PARTICLE_Y_MIN     = -2;
+    /** Highest particle Y offset relative to CENTER_Y. */
+    private static final int    BORDER_PARTICLE_Y_MAX     = 20;
+    /** Particle effect ID used for the border wall visual. */
     private static final String BORDER_PARTICLE_ID = "ForgottenTemple_Circle";
 
     private double currentRadius;
@@ -105,14 +111,20 @@ public class BarrierManager {
         if (entityStore == null || currentRadius <= 0) return;
         Store<EntityStore> store = entityStore.getStore();
 
-        for (int i = 0; i < BORDER_PARTICLE_COUNT; i++) {
-            double angle = (2 * Math.PI * i) / BORDER_PARTICLE_COUNT;
+        double circumference = 2 * Math.PI * currentRadius;
+        int hPoints = Math.max(1, (int) (circumference / BORDER_PARTICLE_H_SPACING));
+
+        for (int i = 0; i < hPoints; i++) {
+            double angle = (2 * Math.PI * i) / hPoints;
             double px = GameConstants.CENTER_X + Math.cos(angle) * currentRadius;
             double pz = GameConstants.CENTER_Z + Math.sin(angle) * currentRadius;
-            ParticleUtil.spawnParticleEffect(
-                    BORDER_PARTICLE_ID,
-                    new Vector3d(px, GameConstants.CENTER_Y, pz),
-                    store);
+
+            for (int dy = BORDER_PARTICLE_Y_MIN; dy <= BORDER_PARTICLE_Y_MAX; dy += BORDER_PARTICLE_Y_STEP) {
+                ParticleUtil.spawnParticleEffect(
+                        BORDER_PARTICLE_ID,
+                        new Vector3d(px, GameConstants.CENTER_Y + dy, pz),
+                        store);
+            }
         }
     }
 }
