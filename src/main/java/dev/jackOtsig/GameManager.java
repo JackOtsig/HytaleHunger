@@ -213,6 +213,7 @@ public class GameManager {
         victimData.resetSecondsOutsideBorder();
         aliveCount--;
         barrierManager.onPlayerEliminated();
+        scoreboardManager.removePlayer(victimData.getUuid());
 
         if (killer != null) {
             PlayerData killerData = players.get(killer.getUuid());
