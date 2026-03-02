@@ -10,9 +10,10 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.jackOtsig.map.MapManager;
 
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Central state machine for the Hunger Games.
@@ -28,10 +29,11 @@ public class GameManager {
     private final MapManager mapManager;
 
     /** All players currently registered in this game instance. */
-    private final Map<UUID, PlayerData> players = new LinkedHashMap<>();
+    private final Map<UUID, PlayerData> players = new ConcurrentHashMap<>();
 
-    private GameState state = GameState.WAITING;
-    private int aliveCount = 0;
+    // volatile: read from the ECS world thread (BlockBreakSystem), written from scheduler thread.
+    private volatile GameState state = GameState.WAITING;
+    private final AtomicInteger aliveCount = new AtomicInteger(0);
 
     // Counters used inside tick methods
     private int votingSecondsLeft  = 0;
@@ -130,7 +132,7 @@ public class GameManager {
 
         freezeAllPlayers(false);
         broadcast("The Hunger Games have begun! May the odds be ever in your favor.");
-        HungerGames.LOGGER.atInfo().log("Entering ACTIVE with " + aliveCount + " players");
+        HungerGames.LOGGER.atInfo().log("Entering ACTIVE with " + aliveCount.get() + " players");
     }
 
     private void transitionToEnded(PlayerData winner) {
@@ -174,7 +176,7 @@ public class GameManager {
         activeSeconds++;
         Collection<PlayerData> alive = getAlivePlayers();
         barrierManager.onSecondTick(alive, entityStore);
-        scoreboardManager.onSecondTick(activeSeconds, aliveCount, players.values());
+        scoreboardManager.onSecondTick(activeSeconds, aliveCount.get(), players.values());
     }
 
     private void tickEnded() {
@@ -204,7 +206,7 @@ public class GameManager {
 
         PlayerData pd = new PlayerData(player);
         players.put(id, pd);
-        aliveCount++;
+        aliveCount.incrementAndGet();
         broadcast(player.getDisplayName() + " joined! ("
                 + players.size() + "/" + GameConstants.MAX_PLAYERS + ")");
 
@@ -229,7 +231,7 @@ public class GameManager {
 
         victimData.setAlive(false);
         victimData.resetSecondsOutsideBorder();
-        aliveCount--;
+        aliveCount.decrementAndGet();
         barrierManager.onPlayerEliminated();
         scoreboardManager.removePlayer(victimData.getUuid());
 
@@ -239,11 +241,11 @@ public class GameManager {
                 killerData.incrementKills();
                 broadcast(killerData.getDisplayName() + " eliminated "
                         + victimData.getDisplayName() + "! ("
-                        + aliveCount + " players remaining)");
+                        + aliveCount.get() + " players remaining)");
             }
         } else {
             broadcast(victimData.getDisplayName() + " was eliminated! ("
-                    + aliveCount + " players remaining)");
+                    + aliveCount.get() + " players remaining)");
         }
 
         setSpectator(victim, victimRef, store);
@@ -255,10 +257,11 @@ public class GameManager {
     private void checkWinCondition() {
         if (state != GameState.ACTIVE) return;
 
-        if (aliveCount == 1) {
+        int alive = aliveCount.get();
+        if (alive == 1) {
             PlayerData winner = getAlivePlayers().stream().findFirst().orElse(null);
             transitionToEnded(winner);
-        } else if (aliveCount == 0) {
+        } else if (alive == 0) {
             transitionToEnded(null);
         }
     }
@@ -268,7 +271,7 @@ public class GameManager {
     /** Clears all state and returns to WAITING. */
     public void resetGame() {
         players.clear();
-        aliveCount        = 0;
+        aliveCount.set(0);
         activeSeconds     = 0;
         votingSecondsLeft = 0;
         preStartSecondsLeft = 0;
