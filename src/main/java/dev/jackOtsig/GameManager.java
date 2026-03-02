@@ -5,8 +5,10 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.GameMode;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.Frozen;
+import com.hypixel.hytale.server.core.entity.UUIDComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.Invulnerable;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.jackOtsig.map.MapManager;
 
@@ -29,8 +31,8 @@ public class GameManager {
     private final VoteManager voteManager;
     private final MapManager mapManager;
 
-    /** All players currently registered in this game instance. */
-    private final Map<UUID, PlayerData> players = new ConcurrentHashMap<>();
+    /** All players currently registered in this game instance, keyed by ECS reference. */
+    private final Map<Ref<EntityStore>, PlayerData> players = new ConcurrentHashMap<>();
 
     // volatile: read from the ECS world thread (BlockBreakSystem), written from scheduler thread.
     private volatile GameState state = GameState.WAITING;
@@ -126,12 +128,7 @@ public class GameManager {
         state = GameState.ACTIVE;
         activeSeconds = 0;
         barrierManager.reset();
-
-        // Show HUD for all players at game start.
-        for (PlayerData pd : players.values()) {
-            scoreboardManager.addPlayer(pd);
-        }
-
+        // HUD setup and unfreeze both run on the world thread inside freezeAllPlayers(false).
         freezeAllPlayers(false);
         broadcast("The Hunger Games have begun! May the odds be ever in your favor.");
         HungerGames.LOGGER.atInfo().log("Entering ACTIVE with " + aliveCount.get() + " players");
@@ -197,13 +194,13 @@ public class GameManager {
             // run on the world thread. We schedule using the cached EntityStore.
             EntityStore es = this.entityStore;
             if (es != null) {
-                Ref<EntityStore> ref = player.getPlayerRef().getReference();
+                Ref<EntityStore> ref = player.getReference();
                 es.getWorld().execute(() ->
                         Player.setGameMode(ref, GameMode.Creative, es.getStore()));
             }
             return;
         }
-        UUID id = player.getUuid();
+        Ref<EntityStore> id = player.getReference();
         if (players.containsKey(id)) return;
 
         PlayerData pd = new PlayerData(player);
@@ -213,7 +210,7 @@ public class GameManager {
         // Keep joining players invulnerable until the game starts.
         EntityStore es = this.entityStore;
         if (es != null) {
-            Ref<EntityStore> ref = player.getPlayerRef().getReference();
+            Ref<EntityStore> ref = player.getReference();
             es.getWorld().execute(() ->
                     es.getStore().addComponent(ref, Invulnerable.getComponentType(), Invulnerable.INSTANCE));
         }
@@ -236,17 +233,17 @@ public class GameManager {
      */
     public void onPlayerDeath(Player victim, Player killer,
                                Ref<EntityStore> victimRef, Store<EntityStore> store) {
-        PlayerData victimData = players.get(victim.getUuid());
+        PlayerData victimData = players.get(victim.getReference());
         if (victimData == null || !victimData.isAlive()) return;
 
         victimData.setAlive(false);
         victimData.resetSecondsOutsideBorder();
         aliveCount.decrementAndGet();
         barrierManager.onPlayerEliminated();
-        scoreboardManager.removePlayer(victimData.getUuid());
+        scoreboardManager.removePlayer(victimRef);
 
         if (killer != null) {
-            PlayerData killerData = players.get(killer.getUuid());
+            PlayerData killerData = players.get(killer.getReference());
             if (killerData != null) {
                 killerData.incrementKills();
                 broadcast(killerData.getDisplayName() + " eliminated "
@@ -258,7 +255,7 @@ public class GameManager {
                     + aliveCount.get() + " players remaining)");
         }
 
-        setSpectator(victim, victimRef, store);
+        setSpectator(victimRef, store);
         checkWinCondition();
     }
 
@@ -298,6 +295,7 @@ public class GameManager {
     public GameState getState()               { return state; }
     public int       getPlayerCount()         { return players.size(); }
     public VoteManager getVoteManager()       { return voteManager; }
+    public EntityStore getEntityStore()       { return entityStore; }
 
     /** Returns a multi-line status string suitable for an admin command. */
     public String getStatus() {
@@ -360,23 +358,23 @@ public class GameManager {
      * them from all living players.
      * Called from PlayerDeathSystem — already on the world thread, store is valid.
      */
-    private void setSpectator(Player victim, Ref<EntityStore> victimRef, Store<EntityStore> store) {
+    private void setSpectator(Ref<EntityStore> victimRef, Store<EntityStore> store) {
         // Switch to Creative so the dead player can't interact with the world.
         Player.setGameMode(victimRef, GameMode.Creative, store);
 
-        // Hide the dead player from all currently-alive players.
-        UUID victimUuid = victim.getUuid();
+        // Get the victim's UUID to pass to each alive player's HiddenPlayersManager.
+        UUID victimUuid = store.getComponent(victimRef, UUIDComponent.getComponentType()).getUuid();
         for (PlayerData pd : players.values()) {
             if (pd.isAlive()) {
-                pd.getPlayer().getPlayerRef().getHiddenPlayersManager().hidePlayer(victimUuid);
+                store.getComponent(pd.getPlayer().getReference(), PlayerRef.getComponentType())
+                        .getHiddenPlayersManager().hidePlayer(victimUuid);
             }
         }
     }
 
     /**
      * Freezes or unfreezes all players using the Frozen marker component.
-     * When unfreezing (game going ACTIVE), also removes the Invulnerable component
-     * so players can deal and receive damage.
+     * When unfreezing (game going ACTIVE), also removes Invulnerable and sets up HUDs.
      * Runs via world.execute() because it's called from the scheduler thread.
      */
     private void freezeAllPlayers(boolean freeze) {
@@ -385,12 +383,13 @@ public class GameManager {
         es.getWorld().execute(() -> {
             Store<EntityStore> store = es.getStore();
             for (PlayerData pd : players.values()) {
-                Ref<EntityStore> ref = pd.getPlayer().getPlayerRef().getReference();
+                Ref<EntityStore> ref = pd.getPlayer().getReference();
                 if (freeze) {
                     store.addComponent(ref, Frozen.getComponentType(), Frozen.get());
                 } else {
                     store.removeComponentIfExists(ref, Frozen.getComponentType());
                     store.removeComponentIfExists(ref, Invulnerable.getComponentType());
+                    scoreboardManager.addPlayer(pd, store);
                 }
             }
         });

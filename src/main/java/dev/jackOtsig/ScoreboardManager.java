@@ -1,5 +1,9 @@
 package dev.jackOtsig;
 
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.jackOtsig.hud.GameHud;
 
 import java.util.Collection;
@@ -7,7 +11,6 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -17,25 +20,27 @@ import java.util.stream.Collectors;
  */
 public class ScoreboardManager {
 
-    /** Active HUDs keyed by player UUID. */
-    private final Map<UUID, GameHud> huds = new LinkedHashMap<>();
+    /** Active HUDs keyed by player entity reference. */
+    private final Map<Ref<EntityStore>, GameHud> huds = new LinkedHashMap<>();
 
     /**
      * Creates and shows a HUD for the given player.
-     * Called from GameManager when a player joins a game session.
+     * Must be called from the ECS world thread (inside world.execute()).
      */
-    public void addPlayer(PlayerData pd) {
-        GameHud hud = new GameHud(pd.getPlayer().getPlayerRef());
+    public void addPlayer(PlayerData pd, Store<EntityStore> store) {
+        PlayerRef playerRef = store.getComponent(
+                pd.getPlayer().getReference(), PlayerRef.getComponentType());
+        GameHud hud = new GameHud(playerRef);
         hud.show();
-        huds.put(pd.getUuid(), hud);
+        huds.put(pd.getPlayer().getReference(), hud);
     }
 
     /**
      * Removes and stops updating the HUD for a player (e.g. when they are
      * eliminated and switched to spectator).
      */
-    public void removePlayer(UUID uuid) {
-        huds.remove(uuid);
+    public void removePlayer(Ref<EntityStore> ref) {
+        huds.remove(ref);
     }
 
     /** Called every second during ACTIVE state. */

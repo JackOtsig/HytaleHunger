@@ -1,11 +1,12 @@
 package dev.jackOtsig;
 
+import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.UUID;
 
 /**
  * Tracks /votestart votes and notifies GameManager when the threshold is crossed.
@@ -13,7 +14,7 @@ import java.util.UUID;
 public class VoteManager {
 
     private final GameManager gameManager;
-    private final Set<UUID> voters = new HashSet<>();
+    private final Set<Ref<EntityStore>> voters = new HashSet<>();
 
     public VoteManager(GameManager gameManager) {
         this.gameManager = gameManager;
@@ -30,7 +31,7 @@ public class VoteManager {
             return;
         }
 
-        UUID id = player.getUuid();
+        Ref<EntityStore> id = player.getReference();
 
         if (voters.contains(id)) {
             player.sendMessage(Message.raw("You have already voted."));

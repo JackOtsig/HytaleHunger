@@ -8,6 +8,7 @@ import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.SimpleItemContainer;
 import com.hypixel.hytale.server.core.modules.entity.teleport.PendingTeleport;
 import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
+import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.meta.state.ItemContainerState;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
@@ -99,7 +100,7 @@ public class MapManager {
         //   new Teleport(Vector3d pos, Vector3f rotation) — rotation: x=pitch, y=yaw, z=roll
         //   PendingTeleport.queueTeleport(Teleport) queues it on the entity.
         PendingTeleport pt = store.getComponent(
-                player.getPlayerRef().getReference(),
+                player.getReference(),
                 PendingTeleport.getComponentType());
         if (pt == null) return;
         pt.queueTeleport(new Teleport(
@@ -127,8 +128,9 @@ public class MapManager {
             // Place the chest block (rotation 0 = default facing).
             world.setBlock(bx, by, bz, blockTypeKey, 0);
 
-            // Retrieve the block state — true: initialise/load if not yet present.
-            if (!(world.getState(bx, by, bz, true) instanceof ItemContainerState ics)) {
+            // Retrieve the block state via the chunk (BlockAccessor.getState is non-deprecated).
+            if (!(world.getChunk(ChunkUtil.indexChunkFromBlock(bx, bz))
+                         .getState(bx, by, bz) instanceof ItemContainerState ics)) {
                 HungerGames.LOGGER.atWarning().log(
                         "spawnChest: no ItemContainerState at " + bx + "," + by + "," + bz
                         + " for block " + blockTypeKey);

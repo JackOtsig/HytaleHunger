@@ -5,6 +5,7 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageCause;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageSystems;
@@ -51,7 +52,7 @@ public class BarrierManager {
 
         for (PlayerData pd : alivePlayers) {
             if (!pd.isAlive()) continue;
-            if (isOutsideBorder(pd.getPlayer())) {
+            if (isOutsideBorder(pd.getPlayer(), store)) {
                 pd.incrementSecondsOutsideBorder();
                 int secondsOut = pd.getSecondsOutsideBorder();
                 double damage = GameConstants.BORDER_DAMAGE_BASE
@@ -81,18 +82,20 @@ public class BarrierManager {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private boolean isOutsideBorder(Player player) {
-        Vector3d pos = player.getPlayerRef().getTransform().getPosition();
+    private boolean isOutsideBorder(Player player, Store<EntityStore> store) {
+        Vector3d pos = store.getComponent(
+                player.getReference(), TransformComponent.getComponentType()).getPosition();
         double dx = pos.x - GameConstants.CENTER_X;
         double dz = pos.z - GameConstants.CENTER_Z;
         return (dx * dx + dz * dz) > currentRadius * currentRadius;
     }
 
+    @SuppressWarnings("deprecation")
     private void applyDamage(Player player, double amount, Store<EntityStore> store) {
-        Ref<EntityStore> ref = player.getPlayerRef().getReference();
+        Ref<EntityStore> ref = player.getReference();
         Damage dmg = new Damage(
                 new Damage.EnvironmentSource("barrier"),
-                DamageCause.ENVIRONMENT,
+                DamageCause.ENVIRONMENT,  // soft-deprecated; no replacement constant yet
                 (float) amount);
         DamageSystems.executeDamage(ref, store, dmg);
     }

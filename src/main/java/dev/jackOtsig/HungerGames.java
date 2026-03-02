@@ -38,7 +38,7 @@ public class HungerGames extends JavaPlugin {
 
         // Register commands.
         getCommandRegistry().registerCommand(new VoteStartCommand(gameManager.getVoteManager()));
-        getCommandRegistry().registerCommand(new SetCenterCommand());
+        getCommandRegistry().registerCommand(new SetCenterCommand(gameManager));
         getCommandRegistry().registerCommand(new ForceStartCommand(gameManager));
         getCommandRegistry().registerCommand(new HgStatusCommand(gameManager));
 
