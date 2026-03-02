@@ -5,6 +5,7 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.GameMode;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.Frozen;
+import com.hypixel.hytale.server.core.modules.entity.component.Invulnerable;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.jackOtsig.map.MapManager;
@@ -112,9 +113,9 @@ public class GameManager {
         preStartSecondsLeft = GameConstants.PRE_START_FREEZE_SECONDS;
         GameConstants.pickRandomCenter();
         mapManager.generateMap();
+        mapManager.placeSpawnPositions(players.values(), entityStore);
         mapManager.spawnCornucopiaChests(entityStore);
         mapManager.spawnFieldChests(entityStore);
-        mapManager.placeSpawnPositions(players.values(), entityStore);
         freezeAllPlayers(true);
         broadcast("All players have been teleported! Game begins in "
                 + preStartSecondsLeft + " seconds!");
@@ -208,6 +209,14 @@ public class GameManager {
         PlayerData pd = new PlayerData(player);
         players.put(id, pd);
         aliveCount.incrementAndGet();
+
+        // Keep joining players invulnerable until the game starts.
+        EntityStore es = this.entityStore;
+        if (es != null) {
+            Ref<EntityStore> ref = player.getPlayerRef().getReference();
+            es.getWorld().execute(() ->
+                    es.getStore().addComponent(ref, Invulnerable.getComponentType(), Invulnerable.INSTANCE));
+        }
         broadcast(player.getDisplayName() + " joined! ("
                 + players.size() + "/" + GameConstants.MAX_PLAYERS + ")");
 
@@ -366,6 +375,8 @@ public class GameManager {
 
     /**
      * Freezes or unfreezes all players using the Frozen marker component.
+     * When unfreezing (game going ACTIVE), also removes the Invulnerable component
+     * so players can deal and receive damage.
      * Runs via world.execute() because it's called from the scheduler thread.
      */
     private void freezeAllPlayers(boolean freeze) {
@@ -379,6 +390,7 @@ public class GameManager {
                     store.addComponent(ref, Frozen.getComponentType(), Frozen.get());
                 } else {
                     store.removeComponentIfExists(ref, Frozen.getComponentType());
+                    store.removeComponentIfExists(ref, Invulnerable.getComponentType());
                 }
             }
         });

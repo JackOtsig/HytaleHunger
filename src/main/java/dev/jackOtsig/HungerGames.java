@@ -9,6 +9,7 @@ import dev.jackOtsig.commands.HgStatusCommand;
 import dev.jackOtsig.commands.SetCenterCommand;
 import dev.jackOtsig.commands.VoteStartCommand;
 import dev.jackOtsig.events.BlockBreakSystem;
+import dev.jackOtsig.events.BlockPlaceSystem;
 import dev.jackOtsig.events.PlayerDeathSystem;
 import dev.jackOtsig.events.PlayerJoinHandler;
 import dev.jackOtsig.events.WorldInitSystem;
@@ -52,6 +53,7 @@ public class HungerGames extends JavaPlugin {
         // PlayerDeathSystem: routes DeathComponent additions to GameManager.onPlayerDeath().
         getEntityStoreRegistry().registerSystem(new WorldInitSystem(gameManager));
         getEntityStoreRegistry().registerSystem(new BlockBreakSystem(gameManager));
+        getEntityStoreRegistry().registerSystem(new BlockPlaceSystem(gameManager));
         getEntityStoreRegistry().registerSystem(new PlayerDeathSystem(gameManager));
 
         // Schedule 1-second game tick.
