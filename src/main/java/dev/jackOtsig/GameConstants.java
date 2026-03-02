@@ -59,7 +59,6 @@ public final class GameConstants {
     public static final double BORDER_SHRINK_PER_ELIMINATION = 10.0;   // tiles
     public static final double BORDER_DAMAGE_BASE = 1.0;               // HP/sec, doubles each consecutive second outside
 
-    public static final int MAX_ITEMS_PER_CATEGORY = 5;
     public static final int CORNUCOPIA_CHEST_COUNT = 6;
     public static final int FIELD_CHEST_COUNT = 40;
 

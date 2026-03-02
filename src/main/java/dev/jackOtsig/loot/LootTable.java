@@ -1,6 +1,5 @@
 package dev.jackOtsig.loot;
 
-import dev.jackOtsig.GameConstants;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -9,8 +8,8 @@ import java.util.Random;
 /**
  * Rolls loot for a single chest.
  *
- * Per category: geometric count roll → P(0)=50%, P(1)=25%, P(2)=12.5% …
- * (capped at MAX_ITEMS_PER_CATEGORY).
+ * Per category: geometric count roll → P(1)=50%, P(2)=25%, P(3)=12.5% …
+ * (minimum 1, uncapped; guarantees ≥3 items per chest).
  * Item selection within the category uses a cumulative-weight walk.
  */
 public class LootTable {
@@ -35,12 +34,12 @@ public class LootTable {
     }
 
     /**
-     * Geometric roll: flip a fair coin until tails, cap at MAX_ITEMS_PER_CATEGORY.
-     * Yields P(n) = 0.5^(n+1) for n < max, remainder absorbed at max.
+     * Geometric roll starting at 1: P(1)=50%, P(2)=25%, P(3)=12.5% …
+     * Uncapped; guarantees at least 1 item per category.
      */
     private int rollItemCount() {
-        int count = 0;
-        while (count < GameConstants.MAX_ITEMS_PER_CATEGORY && RNG.nextBoolean()) {
+        int count = 1;
+        while (RNG.nextBoolean()) {
             count++;
         }
         return count;
