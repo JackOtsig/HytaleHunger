@@ -320,8 +320,12 @@ public class GameManager {
                 sb.append("\n§7Resetting in: §f").append(endedSecondsLeft).append("s");
         }
 
-        sb.append("\n§7Center: §f(")
-          .append(String.format("%.1f, %.1f, %.1f",
+        sb.append("\n§7Map origin: §f(")
+          .append(String.format("%.0f, %.0f, %.0f",
+                  GameConstants.MAP_ORIGIN_X, GameConstants.MAP_ORIGIN_Y, GameConstants.MAP_ORIGIN_Z))
+          .append(")");
+        sb.append("\n§7Cornucopia: §f(")
+          .append(String.format("%.0f, %.0f, %.0f",
                   GameConstants.CENTER_X, GameConstants.CENTER_Y, GameConstants.CENTER_Z))
           .append(")");
         return sb.toString();

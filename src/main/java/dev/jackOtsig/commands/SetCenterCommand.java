@@ -11,16 +11,16 @@ import javax.annotation.Nonnull;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * /addcenter — registers the executing player's current position as a valid
- * cornucopia center. One entry is chosen at random at the start of each game.
+ * /setorigin — sets the map origin to the executing player's current position.
  *
- * Run this while standing at each cornucopia you want in the rotation.
- * The default (0, 64, 0) fallback is always present; added positions supplement it.
+ * Stand at the geographical centre of the hand-built map and run this once.
+ * Each game will then spawn the cornucopia at a random point within
+ * {@link GameConstants#CORNUCOPIA_WANDER_RADIUS} tiles of this origin.
  */
 public class SetCenterCommand extends AbstractCommand {
 
     public SetCenterCommand() {
-        super("addcenter", "Add your current position to the cornucopia center rotation");
+        super("setorigin", "Set the map origin for cornucopia placement (admin)");
     }
 
     @Override
@@ -33,11 +33,13 @@ public class SetCenterCommand extends AbstractCommand {
         Player player = context.senderAs(Player.class);
         Vector3d pos = player.getPlayerRef().getTransform().getPosition();
 
-        GameConstants.MAP_CENTERS.add(new double[]{pos.x, pos.y, pos.z});
+        GameConstants.MAP_ORIGIN_X = pos.x;
+        GameConstants.MAP_ORIGIN_Y = pos.y;
+        GameConstants.MAP_ORIGIN_Z = pos.z;
 
         context.sendMessage(Message.raw(String.format(
-                "Center (%.1f, %.1f, %.1f) added. %d center(s) in rotation.",
-                pos.x, pos.y, pos.z, GameConstants.MAP_CENTERS.size())));
+                "Map origin set to (%.1f, %.1f, %.1f). Cornucopia will spawn within %.0f tiles of this point.",
+                pos.x, pos.y, pos.z, GameConstants.CORNUCOPIA_WANDER_RADIUS)));
         return CompletableFuture.completedFuture(null);
     }
 }
