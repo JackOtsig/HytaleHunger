@@ -6,6 +6,15 @@ public final class GameConstants {
 
     public static final int MAX_PLAYERS = 24;
 
+    /**
+     * World coordinates of the cornucopia (map center).
+     * Set at runtime with /setcenter while standing at the cornucopia position.
+     * All spawn rings, chest clusters, and the barrier origin use these values.
+     */
+    public static double CENTER_X = 0.0;
+    public static double CENTER_Y = 64.0;
+    public static double CENTER_Z = 0.0;
+
     public static final double VOTE_START_THRESHOLD = 0.50;
     public static final int VOTE_COUNTDOWN_SECONDS = 30;
     public static final int PRE_START_FREEZE_SECONDS = 15;

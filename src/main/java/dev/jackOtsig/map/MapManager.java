@@ -33,17 +33,15 @@ public class MapManager {
 
     private static final Random RNG = new Random();
 
-    /** World center (tile) coordinates — assumed 0,0 for now. */
-    private static final double CENTER_X = 0.0;
-    private static final double CENTER_Y = 64.0;  // default ground level
-    private static final double CENTER_Z = 0.0;
-
     private final LootTable lootTable = new LootTable();
 
-    /** Generates the map terrain around the center point. */
-    public void generateMap() {
-        // TODO: Generate terrain using Hytale world/terrain API — API unknown
-    }
+    /**
+     * No-op — the map is hand-built in the world editor.
+     * Use /setcenter while standing at the cornucopia to set the origin before each game.
+     * All chest placement, spawn ring, and barrier calculations read from
+     * {@link GameConstants#CENTER_X}/{@link GameConstants#CENTER_Y}/{@link GameConstants#CENTER_Z}.
+     */
+    public void generateMap() {}
 
     /**
      * Teleports each player to an evenly-spaced position on the spawn ring,
@@ -59,11 +57,11 @@ public class MapManager {
         Store<EntityStore> store = entityStore.getStore();
         for (int i = 0; i < count; i++) {
             double angle = (2 * Math.PI * i) / count;
-            double x = CENTER_X + GameConstants.SPAWN_RING_RADIUS * Math.sin(angle);
-            double z = CENTER_Z + GameConstants.SPAWN_RING_RADIUS * Math.cos(angle);
+            double x = GameConstants.CENTER_X + GameConstants.SPAWN_RING_RADIUS * Math.sin(angle);
+            double z = GameConstants.CENTER_Z + GameConstants.SPAWN_RING_RADIUS * Math.cos(angle);
             // Yaw so the player faces the center (y = yaw in Vector3f).
             float yaw = (float) Math.toDegrees(Math.atan2(Math.sin(angle), -Math.cos(angle)));
-            teleportPlayer(list.get(i).getPlayer(), x, CENTER_Y, z, yaw, store);
+            teleportPlayer(list.get(i).getPlayer(), x, GameConstants.CENTER_Y, z, yaw, store);
         }
     }
 
@@ -74,7 +72,8 @@ public class MapManager {
             double ox = (RNG.nextDouble() * 6) - 3;
             double oz = (RNG.nextDouble() * 6) - 3;
             List<String> items = lootTable.rollChest(ItemTier.CORNUCOPIA);
-            spawnChest(CENTER_X + ox, CENTER_Y, CENTER_Z + oz, CHEST_CORNUCOPIA, items, entityStore);
+            spawnChest(GameConstants.CENTER_X + ox, GameConstants.CENTER_Y,
+                       GameConstants.CENTER_Z + oz, CHEST_CORNUCOPIA, items, entityStore);
         }
     }
 
@@ -85,10 +84,10 @@ public class MapManager {
         for (int i = 0; i < GameConstants.FIELD_CHEST_COUNT; i++) {
             double angle = RNG.nextDouble() * 2 * Math.PI;
             double dist  = Math.sqrt(RNG.nextDouble()) * r;
-            double x = CENTER_X + dist * Math.cos(angle);
-            double z = CENTER_Z + dist * Math.sin(angle);
+            double x = GameConstants.CENTER_X + dist * Math.cos(angle);
+            double z = GameConstants.CENTER_Z + dist * Math.sin(angle);
             List<String> items = lootTable.rollChest(ItemTier.FIELD);
-            spawnChest(x, CENTER_Y, z, CHEST_FIELD, items, entityStore);
+            spawnChest(x, GameConstants.CENTER_Y, z, CHEST_FIELD, items, entityStore);
         }
     }
 

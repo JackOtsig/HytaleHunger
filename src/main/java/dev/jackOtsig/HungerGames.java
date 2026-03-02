@@ -4,6 +4,7 @@ import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
+import dev.jackOtsig.commands.SetCenterCommand;
 import dev.jackOtsig.commands.VoteStartCommand;
 import dev.jackOtsig.events.BlockBreakSystem;
 import dev.jackOtsig.events.PlayerDeathSystem;
@@ -32,8 +33,9 @@ public class HungerGames extends JavaPlugin {
 
         gameManager = new GameManager();
 
-        // Register /votestart command.
+        // Register commands.
         getCommandRegistry().registerCommand(new VoteStartCommand(gameManager.getVoteManager()));
+        getCommandRegistry().registerCommand(new SetCenterCommand());
 
         // Register player-join event.
         // PlayerReadyEvent is keyed (KeyType = String); registerGlobal subscribes to all keys.
