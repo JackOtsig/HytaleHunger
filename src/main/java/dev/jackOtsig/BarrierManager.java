@@ -8,6 +8,7 @@ import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageCause;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageSystems;
+import com.hypixel.hytale.server.core.universe.world.ParticleUtil;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import java.util.Collection;
@@ -21,7 +22,7 @@ public class BarrierManager {
     /** Approximate number of particles to place around the border ring each tick. */
     private static final int BORDER_PARTICLE_COUNT = 120;
     /** Particle effect ID used for the border ring visual. */
-    private static final String BORDER_PARTICLE_ID = "hytale:border_ring";
+    private static final String BORDER_PARTICLE_ID = "ForgottenTemple_Circle";
 
     private double currentRadius;
 
@@ -76,7 +77,9 @@ public class BarrierManager {
 
     private boolean isOutsideBorder(Player player) {
         Vector3d pos = player.getPlayerRef().getTransform().getPosition();
-        return (pos.x * pos.x + pos.z * pos.z) > currentRadius * currentRadius;
+        double dx = pos.x - GameConstants.CENTER_X;
+        double dz = pos.z - GameConstants.CENTER_Z;
+        return (dx * dx + dz * dz) > currentRadius * currentRadius;
     }
 
     private void applyDamage(Player player, double amount, Store<EntityStore> store) {
@@ -102,16 +105,14 @@ public class BarrierManager {
         if (entityStore == null || currentRadius <= 0) return;
         Store<EntityStore> store = entityStore.getStore();
 
-        // Spawn particles in a ring at currentRadius to visualise the border.
-        // ParticleUtil.spawnParticleEffect(String id, Vector3d pos, ComponentAccessor)
-        // Store implements ComponentAccessor, so store can be passed directly.
         for (int i = 0; i < BORDER_PARTICLE_COUNT; i++) {
             double angle = (2 * Math.PI * i) / BORDER_PARTICLE_COUNT;
-            double px = Math.cos(angle) * currentRadius;
-            double pz = Math.sin(angle) * currentRadius;
-            // TODO: Replace 64.0 with terrain height at (px, pz) when world height API is known.
-            // TODO: Confirm BORDER_PARTICLE_ID against actual Hytale particle registry.
-            // ParticleUtil.spawnParticleEffect(BORDER_PARTICLE_ID, new Vector3d(px, 64.0, pz), store);
+            double px = GameConstants.CENTER_X + Math.cos(angle) * currentRadius;
+            double pz = GameConstants.CENTER_Z + Math.sin(angle) * currentRadius;
+            ParticleUtil.spawnParticleEffect(
+                    BORDER_PARTICLE_ID,
+                    new Vector3d(px, GameConstants.CENTER_Y, pz),
+                    store);
         }
     }
 }
