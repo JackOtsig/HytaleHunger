@@ -11,17 +11,16 @@ import javax.annotation.Nonnull;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * /setcenter — sets the cornucopia (map center) to the executing player's
- * current position.
+ * /addcenter — registers the executing player's current position as a valid
+ * cornucopia center. One entry is chosen at random at the start of each game.
  *
- * Run this while standing at the cornucopia before starting the server for
- * a new map. Updates {@link GameConstants#CENTER_X/Y/Z} at runtime so that
- * all chest placement, spawn ring, and barrier calculations use the new origin.
+ * Run this while standing at each cornucopia you want in the rotation.
+ * The default (0, 64, 0) fallback is always present; added positions supplement it.
  */
 public class SetCenterCommand extends AbstractCommand {
 
     public SetCenterCommand() {
-        super("setcenter", "Set the cornucopia center to your current position");
+        super("addcenter", "Add your current position to the cornucopia center rotation");
     }
 
     @Override
@@ -34,13 +33,11 @@ public class SetCenterCommand extends AbstractCommand {
         Player player = context.senderAs(Player.class);
         Vector3d pos = player.getPlayerRef().getTransform().getPosition();
 
-        GameConstants.CENTER_X = pos.x;
-        GameConstants.CENTER_Y = pos.y;
-        GameConstants.CENTER_Z = pos.z;
+        GameConstants.MAP_CENTERS.add(new double[]{pos.x, pos.y, pos.z});
 
         context.sendMessage(Message.raw(String.format(
-                "Center set to (%.1f, %.1f, %.1f). Chests and spawn ring will use this origin.",
-                pos.x, pos.y, pos.z)));
+                "Center (%.1f, %.1f, %.1f) added. %d center(s) in rotation.",
+                pos.x, pos.y, pos.z, GameConstants.MAP_CENTERS.size())));
         return CompletableFuture.completedFuture(null);
     }
 }

@@ -110,6 +110,7 @@ public class GameManager {
     private void transitionToPreStart() {
         state = GameState.PRE_START;
         preStartSecondsLeft = GameConstants.PRE_START_FREEZE_SECONDS;
+        GameConstants.pickRandomCenter();
         mapManager.generateMap();
         mapManager.spawnCornucopiaChests(entityStore);
         mapManager.spawnFieldChests(entityStore);
