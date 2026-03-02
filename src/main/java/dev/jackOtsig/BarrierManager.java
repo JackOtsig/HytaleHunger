@@ -3,6 +3,7 @@ package dev.jackOtsig;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.math.vector.Vector3d;
+import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageCause;
@@ -45,10 +46,15 @@ public class BarrierManager {
             if (!pd.isAlive()) continue;
             if (isOutsideBorder(pd.getPlayer())) {
                 pd.incrementSecondsOutsideBorder();
+                int secondsOut = pd.getSecondsOutsideBorder();
                 double damage = GameConstants.BORDER_DAMAGE_BASE
-                        * Math.pow(2, pd.getSecondsOutsideBorder() - 1);
+                        * Math.pow(2, secondsOut - 1);
                 applyDamage(pd.getPlayer(), damage, store);
+                warnPlayer(pd.getPlayer(), secondsOut, damage);
             } else {
+                if (pd.getSecondsOutsideBorder() > 0) {
+                    pd.getPlayer().sendMessage(Message.raw("§aYou are back inside the border."));
+                }
                 pd.resetSecondsOutsideBorder();
             }
         }
@@ -80,6 +86,16 @@ public class BarrierManager {
                 DamageCause.ENVIRONMENT,
                 (float) amount);
         DamageSystems.executeDamage(ref, store, dmg);
+    }
+
+    private void warnPlayer(Player player, int secondsOut, double damage) {
+        if (secondsOut == 1) {
+            player.sendMessage(Message.raw(
+                    "§cYou are outside the border! Return immediately or take increasing damage!"));
+        } else if (secondsOut % 5 == 0) {
+            player.sendMessage(Message.raw(String.format(
+                    "§c[%ds outside border] Taking %.0f damage/s — get back now!", secondsOut, damage)));
+        }
     }
 
     private void updateBorderVisual(EntityStore entityStore) {
