@@ -517,7 +517,6 @@ public class GameManager {
                     // and cascade into an NPC-system IndexOutOfBoundsException world crash.
                     store.removeComponentIfExists(ref, Frozen.getComponentType());
                     store.addComponent(ref, Frozen.getComponentType(), Frozen.get());
-                    resetAndLockStats(ref, store);
                 } else {
                     String name = pd.getDisplayName();
                     HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: removing Frozen");
