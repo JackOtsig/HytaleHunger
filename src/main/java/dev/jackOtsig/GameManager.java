@@ -8,10 +8,16 @@ import com.hypixel.hytale.protocol.GameMode;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.Frozen;
 import com.hypixel.hytale.server.core.entity.UUIDComponent;
+import com.hypixel.hytale.server.core.entity.effect.EffectControllerComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.Invulnerable;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
 import com.hypixel.hytale.math.util.ChunkUtil;
+import com.hypixel.hytale.server.core.modules.entitystats.EntityStatMap;
+import com.hypixel.hytale.server.core.modules.entitystats.EntityStatValue;
+import com.hypixel.hytale.server.core.modules.entitystats.asset.DefaultEntityStatTypes;
+import com.hypixel.hytale.server.core.modules.entitystats.modifier.Modifier;
+import com.hypixel.hytale.server.core.modules.entitystats.modifier.StaticModifier;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.jackOtsig.map.MapManager;
@@ -42,6 +48,9 @@ public class GameManager {
     // volatile: read from the ECS world thread (BlockBreakSystem), written from scheduler thread.
     private volatile GameState state = GameState.WAITING;
     private final AtomicInteger aliveCount = new AtomicInteger(0);
+
+    /** Modifier key used to lock player stats at their max during non-ACTIVE phases. */
+    private static final String STAT_LOCK_KEY = "hg_lock";
 
     /**
      * Set when an admin uses /forcenext to advance through stages.
@@ -258,6 +267,7 @@ public class GameManager {
                 Store<EntityStore> store = es.getStore();
                 Player.setGameMode(ref, GameMode.Adventure, store);
                 store.addComponent(ref, Invulnerable.getComponentType(), Invulnerable.INSTANCE);
+                resetAndLockStats(ref, store);
                 teleportToCornucopia(ref, store);
             });
         }
@@ -339,6 +349,7 @@ public class GameManager {
                     // Re-apply lobby protection: Invulnerable so players can't be harmed.
                     store.removeComponentIfExists(ref, Invulnerable.getComponentType());
                     store.addComponent(ref, Invulnerable.getComponentType(), Invulnerable.INSTANCE);
+                    resetAndLockStats(ref, store);
                     teleportToCornucopia(ref, store);
                 }
             });
@@ -453,6 +464,7 @@ public class GameManager {
                 Ref<EntityStore> ref = pd.getPlayer().getReference();
                 if (freeze) {
                     store.addComponent(ref, Frozen.getComponentType(), Frozen.get());
+                    resetAndLockStats(ref, store);
                 } else {
                     String name = pd.getDisplayName();
                     HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: removing Frozen");
@@ -461,12 +473,71 @@ public class GameManager {
                     store.removeComponentIfExists(ref, Invulnerable.getComponentType());
                     HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: setting Adventure mode");
                     Player.setGameMode(ref, GameMode.Adventure, store);
+                    HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: unlocking and maximizing stats");
+                    unlockAndMaximizeStats(ref, store);
                     HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: adding HUD");
                     scoreboardManager.addPlayer(pd, store);
                     HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: done");
                 }
             }
         });
+    }
+
+    /**
+     * Maximizes health, stamina, mana, and signature energy, clears all effects,
+     * then applies MIN modifiers so those stats cannot drain while in the lobby.
+     * Must be called on the world thread.
+     */
+    private void resetAndLockStats(Ref<EntityStore> ref, Store<EntityStore> store) {
+        EntityStatMap statMap = store.getComponent(ref, EntityStatMap.getComponentType());
+        if (statMap != null) {
+            int[] indices = {
+                DefaultEntityStatTypes.getHealth(),
+                DefaultEntityStatTypes.getStamina(),
+                DefaultEntityStatTypes.getMana(),
+                DefaultEntityStatTypes.getSignatureEnergy()
+            };
+            for (int idx : indices) {
+                statMap.maximizeStatValue(idx);
+                EntityStatValue sv = statMap.get(idx);
+                if (sv != null) {
+                    statMap.putModifier(idx, STAT_LOCK_KEY,
+                            new StaticModifier(Modifier.ModifierTarget.MIN,
+                                    StaticModifier.CalculationType.ADDITIVE, sv.getMax()));
+                }
+            }
+        }
+        EffectControllerComponent effects =
+                store.getComponent(ref, EffectControllerComponent.getComponentType());
+        if (effects != null) {
+            effects.clearEffects(ref, store);
+        }
+    }
+
+    /**
+     * Removes lobby stat locks, maximizes all stats, and clears effects
+     * so the player starts ACTIVE gameplay at full health with no buffs/debuffs.
+     * Must be called on the world thread.
+     */
+    private void unlockAndMaximizeStats(Ref<EntityStore> ref, Store<EntityStore> store) {
+        EntityStatMap statMap = store.getComponent(ref, EntityStatMap.getComponentType());
+        if (statMap != null) {
+            int[] indices = {
+                DefaultEntityStatTypes.getHealth(),
+                DefaultEntityStatTypes.getStamina(),
+                DefaultEntityStatTypes.getMana(),
+                DefaultEntityStatTypes.getSignatureEnergy()
+            };
+            for (int idx : indices) {
+                statMap.removeModifier(idx, STAT_LOCK_KEY);
+                statMap.maximizeStatValue(idx);
+            }
+        }
+        EffectControllerComponent effects =
+                store.getComponent(ref, EffectControllerComponent.getComponentType());
+        if (effects != null) {
+            effects.clearEffects(ref, store);
+        }
     }
 
     /**
