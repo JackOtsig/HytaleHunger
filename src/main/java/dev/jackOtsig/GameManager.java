@@ -10,7 +10,6 @@ import com.hypixel.hytale.server.core.entity.Frozen;
 import com.hypixel.hytale.server.core.entity.UUIDComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.Invulnerable;
 import com.hypixel.hytale.server.core.entity.entities.Player;
-import com.hypixel.hytale.server.core.modules.entity.teleport.PendingTeleport;
 import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
@@ -474,13 +473,9 @@ public class GameManager {
      * Must be called on the world thread (inside world.execute()).
      */
     private void teleportToCornucopia(Ref<EntityStore> ref, Store<EntityStore> store) {
-        PendingTeleport pt = store.getComponent(ref, PendingTeleport.getComponentType());
-        if (pt == null) {
-            pt = new PendingTeleport();
-            store.addComponent(ref, PendingTeleport.getComponentType(), pt);
-        }
-        pt.queueTeleport(new Teleport(
-                new Vector3d(GameConstants.CENTER_X, GameConstants.CENTER_Y, GameConstants.CENTER_Z),
-                new Vector3f(0, 0, 0)));
+        store.putComponent(ref, Teleport.getComponentType(),
+                Teleport.createForPlayer(
+                        new Vector3d(GameConstants.CENTER_X, GameConstants.CENTER_Y, GameConstants.CENTER_Z),
+                        new Vector3f(0, 0, 0)));
     }
 }

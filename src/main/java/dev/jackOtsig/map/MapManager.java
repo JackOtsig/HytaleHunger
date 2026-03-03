@@ -7,7 +7,6 @@ import com.hypixel.hytale.math.vector.Vector3f;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.SimpleItemContainer;
-import com.hypixel.hytale.server.core.modules.entity.teleport.PendingTeleport;
 import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
 import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.server.core.universe.world.World;
@@ -120,16 +119,8 @@ public class MapManager {
     private void teleportPlayer(Player player, double x, double y, double z, float yaw,
                                 Store<EntityStore> store) {
         Ref<EntityStore> ref = player.getReference();
-        PendingTeleport pt = store.getComponent(ref, PendingTeleport.getComponentType());
-        if (pt == null) {
-            pt = new PendingTeleport();
-            store.addComponent(ref, PendingTeleport.getComponentType(), pt);
-            HungerGames.LOGGER.atInfo().log(
-                    "teleportPlayer: added PendingTeleport for " + player.getDisplayName());
-        }
-        pt.queueTeleport(new Teleport(new Vector3d(x, y, z), new Vector3f(0, yaw, 0)));
-        HungerGames.LOGGER.atInfo().log("teleportPlayer: queued teleport for "
-                + player.getDisplayName() + " → (" + x + ", " + y + ", " + z + ")");
+        store.putComponent(ref, Teleport.getComponentType(),
+                Teleport.createForPlayer(new Vector3d(x, y, z), new Vector3f(0, yaw, 0)));
     }
 
     /** Places one chest block and fills it with loot. Must be called on the world thread. */
