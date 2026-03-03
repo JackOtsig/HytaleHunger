@@ -4,12 +4,14 @@ import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
+import dev.jackOtsig.commands.ForceNextStageCommand;
 import dev.jackOtsig.commands.ForceStartCommand;
 import dev.jackOtsig.commands.HgStatusCommand;
 import dev.jackOtsig.commands.SetCenterCommand;
 import dev.jackOtsig.commands.VoteStartCommand;
 import dev.jackOtsig.events.BlockBreakSystem;
 import dev.jackOtsig.events.BlockPlaceSystem;
+import dev.jackOtsig.events.EntityDamageSystem;
 import dev.jackOtsig.events.PlayerDeathSystem;
 import dev.jackOtsig.events.PlayerJoinHandler;
 import dev.jackOtsig.events.WorldInitSystem;
@@ -40,6 +42,7 @@ public class HungerGames extends JavaPlugin {
         getCommandRegistry().registerCommand(new VoteStartCommand(gameManager.getVoteManager()));
         getCommandRegistry().registerCommand(new SetCenterCommand(gameManager));
         getCommandRegistry().registerCommand(new ForceStartCommand(gameManager));
+        getCommandRegistry().registerCommand(new ForceNextStageCommand(gameManager));
         getCommandRegistry().registerCommand(new HgStatusCommand(gameManager));
 
         // Register player-join event.
@@ -54,6 +57,7 @@ public class HungerGames extends JavaPlugin {
         getEntityStoreRegistry().registerSystem(new WorldInitSystem(gameManager));
         getEntityStoreRegistry().registerSystem(new BlockBreakSystem(gameManager));
         getEntityStoreRegistry().registerSystem(new BlockPlaceSystem(gameManager));
+        getEntityStoreRegistry().registerSystem(new EntityDamageSystem(gameManager));
         getEntityStoreRegistry().registerSystem(new PlayerDeathSystem(gameManager));
 
         // Schedule 1-second game tick.

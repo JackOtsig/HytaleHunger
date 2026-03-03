@@ -39,6 +39,13 @@ public class GameManager {
     private volatile GameState state = GameState.WAITING;
     private final AtomicInteger aliveCount = new AtomicInteger(0);
 
+    /**
+     * Set when an admin uses /forcenext to advance through stages.
+     * Suppresses the 1-player auto-end check so admins can test without the game ending.
+     * Cleared on resetGame().
+     */
+    private volatile boolean adminMode = false;
+
     // Counters used inside tick methods
     private int votingSecondsLeft  = 0;
     private int preStartSecondsLeft = 0;
@@ -101,6 +108,31 @@ public class GameManager {
         transitionToPreStart();
         return null;
     }
+
+    /**
+     * Admin command — advances the game one stage forward, bypassing all normal requirements.
+     * Sets adminMode=true so the 1-player win condition is suppressed.
+     *
+     * Cycle: WAITING → PRE_START → ACTIVE → WAITING (reset)
+     *
+     * @return a status string to send back to the caller (never null)
+     */
+    public String forceNextStage() {
+        GameState before = state;
+        switch (state) {
+            case WAITING, VOTING -> {
+                adminMode = true;
+                transitionToPreStart();
+            }
+            case PRE_START -> transitionToActive();
+            case ACTIVE, ENDED -> resetGame();
+        }
+        HungerGames.LOGGER.atInfo().log("Admin forced stage: " + before + " → " + state
+                + (adminMode ? " [admin mode]" : ""));
+        return "Advanced: " + before + " → " + state + (adminMode ? " §7(admin mode on)" : "");
+    }
+
+    public boolean isAdminMode() { return adminMode; }
 
     /** Called when >50% of players have voted /votestart. */
     public void onVoteThresholdReached() {
@@ -267,6 +299,7 @@ public class GameManager {
 
     private void checkWinCondition() {
         if (state != GameState.ACTIVE) return;
+        if (adminMode) return; // admin is testing — don't auto-end on low player count
 
         int alive = aliveCount.get();
         if (alive == 1) {
@@ -304,6 +337,7 @@ public class GameManager {
         voteManager.reset();
         barrierManager.reset();
         scoreboardManager.clearScoreboard();
+        adminMode = false;
         state = GameState.WAITING;
         HungerGames.LOGGER.atInfo().log("Game reset — returning to WAITING");
     }
