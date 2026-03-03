@@ -80,12 +80,30 @@ public class GameManager {
     }
 
     /**
-     * Called by WorldInitSystem / PlayerDeathSystem when the EntityStore is first available.
-     * Idempotent — only stores on the first call.
+     * Called by WorldInitSystem whenever an entity is added to a world.
+     * If the EntityStore changes (world was destroyed and recreated after a crash),
+     * the stale game state is cleared so reconnecting players are not stuck in
+     * a dead ACTIVE game with a reference to a crashed world.
      */
-    public void initEntityStore(EntityStore entityStore) {
-        if (this.entityStore == null) {
-            this.entityStore = entityStore;
+    public void initEntityStore(EntityStore newEntityStore) {
+        EntityStore prev = this.entityStore;
+        this.entityStore = newEntityStore;
+
+        if (prev != null && prev != newEntityStore) {
+            // World was replaced (crashed and recreated). Reset all in-memory state
+            // without world.execute() — the old world is dead and unusable.
+            players.clear();
+            aliveCount.set(0);
+            activeSeconds      = 0;
+            votingSecondsLeft  = 0;
+            preStartSecondsLeft = 0;
+            endedSecondsLeft   = 0;
+            voteManager.reset();
+            barrierManager.reset();
+            adminMode = false;
+            state = GameState.WAITING;
+            HungerGames.LOGGER.atWarning().log(
+                    "EntityStore replaced — world recreated after crash, game reset to WAITING");
         }
     }
 
@@ -267,7 +285,6 @@ public class GameManager {
                 Store<EntityStore> store = es.getStore();
                 Player.setGameMode(ref, GameMode.Adventure, store);
                 store.addComponent(ref, Invulnerable.getComponentType(), Invulnerable.INSTANCE);
-                resetAndLockStats(ref, store);
                 teleportToCornucopia(ref, store);
             });
         }
