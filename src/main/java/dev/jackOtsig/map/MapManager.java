@@ -1,5 +1,6 @@
 package dev.jackOtsig.map;
 
+import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.math.vector.Vector3f;
@@ -118,18 +119,17 @@ public class MapManager {
 
     private void teleportPlayer(Player player, double x, double y, double z, float yaw,
                                 Store<EntityStore> store) {
-        PendingTeleport pt = store.getComponent(
-                player.getReference(),
-                PendingTeleport.getComponentType());
+        Ref<EntityStore> ref = player.getReference();
+        PendingTeleport pt = store.getComponent(ref, PendingTeleport.getComponentType());
         if (pt == null) {
-            HungerGames.LOGGER.atWarning().log(
-                    "teleportPlayer: PendingTeleport is null for " + player.getDisplayName()
-                    + " — teleport skipped");
-            return;
+            pt = new PendingTeleport();
+            store.addComponent(ref, PendingTeleport.getComponentType(), pt);
+            HungerGames.LOGGER.atInfo().log(
+                    "teleportPlayer: added PendingTeleport for " + player.getDisplayName());
         }
-        pt.queueTeleport(new Teleport(
-                new Vector3d(x, y, z),
-                new Vector3f(0, yaw, 0)));
+        pt.queueTeleport(new Teleport(new Vector3d(x, y, z), new Vector3f(0, yaw, 0)));
+        HungerGames.LOGGER.atInfo().log("teleportPlayer: queued teleport for "
+                + player.getDisplayName() + " → (" + x + ", " + y + ", " + z + ")");
     }
 
     /** Places one chest block and fills it with loot. Must be called on the world thread. */

@@ -5,6 +5,7 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.jackOtsig.hud.GameHud;
+import com.hypixel.hytale.logger.HytaleLogger;
 
 import java.util.Collection;
 import java.util.Comparator;
@@ -30,6 +31,11 @@ public class ScoreboardManager {
     public void addPlayer(PlayerData pd, Store<EntityStore> store) {
         PlayerRef playerRef = store.getComponent(
                 pd.getPlayer().getReference(), PlayerRef.getComponentType());
+        if (playerRef == null) {
+            HungerGames.LOGGER.atWarning().log(
+                    "addPlayer: PlayerRef null for " + pd.getDisplayName() + " — HUD skipped");
+            return;
+        }
         GameHud hud = new GameHud(playerRef);
         hud.show();
         huds.put(pd.getPlayer().getReference(), hud);

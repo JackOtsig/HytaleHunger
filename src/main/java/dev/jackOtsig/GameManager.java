@@ -439,11 +439,16 @@ public class GameManager {
                 if (freeze) {
                     store.addComponent(ref, Frozen.getComponentType(), Frozen.get());
                 } else {
+                    String name = pd.getDisplayName();
+                    HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: removing Frozen");
                     store.removeComponentIfExists(ref, Frozen.getComponentType());
+                    HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: removing Invulnerable");
                     store.removeComponentIfExists(ref, Invulnerable.getComponentType());
-                    // Adventure = combat-enabled mode (Hytale has no Survival).
+                    HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: setting Adventure mode");
                     Player.setGameMode(ref, GameMode.Adventure, store);
+                    HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: adding HUD");
                     scoreboardManager.addPlayer(pd, store);
+                    HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: done");
                 }
             }
         });
