@@ -10,6 +10,7 @@ import com.hypixel.hytale.server.core.entity.Frozen;
 import com.hypixel.hytale.server.core.entity.UUIDComponent;
 import com.hypixel.hytale.server.core.entity.effect.EffectControllerComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.Invulnerable;
+import com.hypixel.hytale.server.core.modules.entity.damage.DeathComponent;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
 import com.hypixel.hytale.math.util.ChunkUtil;
@@ -463,12 +464,29 @@ public class GameManager {
      * Switches a dead player to Creative mode (no Spectator in Hytale) and hides
      * them from all living players.
      * Must be called via world.execute() — not directly from a system callback.
+     *
+     * Removing DeathComponent is critical: without it, Hytale keeps showing the
+     * respawn screen, the player keeps clicking respawn, and PageManager throws
+     * "Client sent unexpected acknowledgement" in an infinite loop.
+     * Restoring health prevents health=0 in Creative mode from re-triggering death.
      */
     private void setSpectator(Ref<EntityStore> victimRef, Store<EntityStore> store) {
         // Switch to Creative so the dead player can't interact with the world.
         Player.setGameMode(victimRef, GameMode.Creative, store);
 
-        // Get the victim's UUID to pass to each alive player's HiddenPlayersManager.
+        // Remove DeathComponent to dismiss Hytale's respawn screen server-side.
+        // If we leave it, the client keeps showing the respawn button and every
+        // click causes a "Client sent unexpected acknowledgement" loop.
+        store.removeComponentIfExists(victimRef, DeathComponent.getComponentType());
+
+        // Restore health so health=0 doesn't re-trigger Hytale's death system
+        // while the player is in Creative mode as a spectator.
+        EntityStatMap statMap = store.getComponent(victimRef, EntityStatMap.getComponentType());
+        if (statMap != null) {
+            statMap.maximizeStatValue(DefaultEntityStatTypes.getHealth());
+        }
+
+        // Hide from all currently alive players.
         UUID victimUuid = store.getComponent(victimRef, UUIDComponent.getComponentType()).getUuid();
         for (PlayerData pd : players.values()) {
             if (pd.isAlive()) {
