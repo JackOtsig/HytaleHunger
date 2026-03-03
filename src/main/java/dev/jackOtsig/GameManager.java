@@ -281,18 +281,21 @@ public class GameManager {
 
     /**
      * Called by PlayerDeathSystem when a player's DeathComponent is added.
-     * Runs on the ECS world thread — store operations are safe to call directly.
+     * Runs inside an ECS system callback — the store is locked, so direct store
+     * modifications (setGameMode, addComponent, etc.) are forbidden here.
+     * State-only updates happen immediately; store ops are deferred via world.execute().
      *
      * @param victim    the player who died
      * @param killer    the player who delivered the killing blow (may be null)
      * @param victimRef the ECS ref of the victim
-     * @param store     the current EntityStore accessor
+     * @param store     the current EntityStore accessor (read-only safe; no writes)
      */
     public void onPlayerDeath(Player victim, Player killer,
                                Ref<EntityStore> victimRef, Store<EntityStore> store) {
         PlayerData victimData = players.get(victim.getReference());
         if (victimData == null || !victimData.isAlive()) return;
 
+        // Safe: pure Java field updates, no store writes.
         victimData.setAlive(false);
         victimData.resetSecondsOutsideBorder();
         aliveCount.decrementAndGet();
@@ -312,8 +315,16 @@ public class GameManager {
                     + aliveCount.get() + " players remaining)");
         }
 
-        setSpectator(victimRef, store);
-        checkWinCondition(store);
+        // Defer store-modifying ops: setGameMode and addComponent are forbidden
+        // while the ECS store is processing a system callback.
+        EntityStore es = this.entityStore;
+        if (es != null) {
+            es.getWorld().execute(() -> {
+                Store<EntityStore> s = es.getStore();
+                setSpectator(victimRef, s);
+                checkWinCondition(s);
+            });
+        }
     }
 
     // ── Win condition ─────────────────────────────────────────────────────────
@@ -434,7 +445,7 @@ public class GameManager {
     /**
      * Switches a dead player to Creative mode (no Spectator in Hytale) and hides
      * them from all living players.
-     * Called from PlayerDeathSystem — already on the world thread, store is valid.
+     * Must be called via world.execute() — not directly from a system callback.
      */
     private void setSpectator(Ref<EntityStore> victimRef, Store<EntityStore> store) {
         // Switch to Creative so the dead player can't interact with the world.
