@@ -38,8 +38,8 @@ public class MapManager {
 
     private final LootTable lootTable = new LootTable();
 
-    /** Pre-calculated data for a single chest placement. */
-    private record ChestSpec(int bx, int by, int bz, String blockTypeKey, List<String> itemIds) {}
+    /** Pre-calculated data for a single chest placement. Y is resolved at placement time. */
+    private record ChestSpec(int bx, int bz, String blockTypeKey, List<String> itemIds) {}
 
     /**
      * No-op — the map is hand-built in the world editor.
@@ -82,7 +82,6 @@ public class MapManager {
             double oz = (RNG.nextDouble() * 6) - 3;
             specs.add(new ChestSpec(
                     (int) Math.floor(GameConstants.CENTER_X + ox),
-                    (int) Math.floor(GameConstants.CENTER_Y),
                     (int) Math.floor(GameConstants.CENTER_Z + oz),
                     CHEST_CORNUCOPIA,
                     lootTable.rollChest(ItemTier.CORNUCOPIA)));
@@ -107,7 +106,6 @@ public class MapManager {
             double z = GameConstants.CENTER_Z + dist * Math.sin(angle);
             specs.add(new ChestSpec(
                     (int) Math.floor(x),
-                    (int) Math.floor(GameConstants.CENTER_Y),
                     (int) Math.floor(z),
                     CHEST_FIELD,
                     lootTable.rollChest(ItemTier.FIELD)));
@@ -138,13 +136,14 @@ public class MapManager {
 
     /** Places one chest block and fills it with loot. Must be called on the world thread. */
     private void placeChest(ChestSpec spec, World world) {
-        world.setBlock(spec.bx(), spec.by(), spec.bz(), spec.blockTypeKey(), 0);
+        int by = (int) findSurfaceY(world, spec.bx(), spec.bz());
+        world.setBlock(spec.bx(), by, spec.bz(), spec.blockTypeKey(), 0);
 
         if (!(world.getChunk(ChunkUtil.indexChunkFromBlock(spec.bx(), spec.bz()))
-                     .getState(spec.bx(), spec.by(), spec.bz()) instanceof ItemContainerState ics)) {
+                     .getState(spec.bx(), by, spec.bz()) instanceof ItemContainerState ics)) {
             HungerGames.LOGGER.atWarning().log(
                     "spawnChest: no ItemContainerState at "
-                    + spec.bx() + "," + spec.by() + "," + spec.bz()
+                    + spec.bx() + "," + by + "," + spec.bz()
                     + " for block " + spec.blockTypeKey());
             return;
         }
