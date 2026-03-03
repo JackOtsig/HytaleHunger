@@ -375,6 +375,8 @@ public class GameManager {
                 Store<EntityStore> store = es.getStore();
                 for (Ref<EntityStore> ref : refs) {
                     Player.setGameMode(ref, GameMode.Adventure, store);
+                    // Unfreeze in case the game is reset from PRE_START.
+                    store.removeComponentIfExists(ref, Frozen.getComponentType());
                     // Re-apply lobby protection: Invulnerable so players can't be harmed.
                     store.removeComponentIfExists(ref, Invulnerable.getComponentType());
                     store.addComponent(ref, Invulnerable.getComponentType(), Invulnerable.INSTANCE);
@@ -509,6 +511,11 @@ public class GameManager {
             for (PlayerData pd : players.values()) {
                 Ref<EntityStore> ref = pd.getPlayer().getReference();
                 if (freeze) {
+                    // removeComponentIfExists first: Hytale may already have Frozen on the
+                    // entity (e.g. applied during initial spawn). addComponent throws if the
+                    // component is already present, which would corrupt ECS archetype state
+                    // and cascade into an NPC-system IndexOutOfBoundsException world crash.
+                    store.removeComponentIfExists(ref, Frozen.getComponentType());
                     store.addComponent(ref, Frozen.getComponentType(), Frozen.get());
                     resetAndLockStats(ref, store);
                 } else {
