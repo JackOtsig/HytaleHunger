@@ -100,15 +100,21 @@ public class GameHud extends CustomUIHud {
     // ── CustomUIHud overrides ─────────────────────────────────────────────────
 
     /**
-     * Appends the full HUD layout then populates initial label values (clear=true).
-     * Must be called on the ECS world thread.
+     * Sends the full HUD layout then populates initial label values.
+     * Two packets: first clears and appends the layout (appendInline),
+     * then sets initial values. Must be called on the ECS world thread.
      */
     @Override
     public void show() {
-        UICommandBuilder builder = new UICommandBuilder();
-        builder.append(LAYOUT);
-        build(builder);
-        update(true, builder);
+        // Packet 1: clear existing HUD and send the layout structure.
+        UICommandBuilder layoutBuilder = new UICommandBuilder();
+        layoutBuilder.appendInline(null, LAYOUT);
+        update(true, layoutBuilder);
+
+        // Packet 2: set initial label values against the now-established layout.
+        UICommandBuilder valuesBuilder = new UICommandBuilder();
+        build(valuesBuilder);
+        update(false, valuesBuilder);
     }
 
     /**
