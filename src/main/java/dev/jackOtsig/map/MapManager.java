@@ -120,7 +120,7 @@ public class MapManager {
                                 Store<EntityStore> store) {
         Ref<EntityStore> ref = player.getReference();
         store.putComponent(ref, Teleport.getComponentType(),
-                Teleport.createForPlayer(new Vector3d(x, y, z), new Vector3f(0, yaw, 0)));
+                new Teleport(new Vector3d(x, y, z), new Vector3f(0, yaw, 0)));
     }
 
     /** Places one chest block and fills it with loot. Must be called on the world thread. */

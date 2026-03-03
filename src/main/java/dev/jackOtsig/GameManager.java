@@ -474,7 +474,7 @@ public class GameManager {
      */
     private void teleportToCornucopia(Ref<EntityStore> ref, Store<EntityStore> store) {
         store.putComponent(ref, Teleport.getComponentType(),
-                Teleport.createForPlayer(
+                new Teleport(
                         new Vector3d(GameConstants.CENTER_X, GameConstants.CENTER_Y, GameConstants.CENTER_Z),
                         new Vector3f(0, 0, 0)));
     }
