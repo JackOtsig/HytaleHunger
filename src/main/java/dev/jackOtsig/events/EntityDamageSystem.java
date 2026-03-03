@@ -13,8 +13,10 @@ import dev.jackOtsig.GameManager;
 import dev.jackOtsig.GameState;
 
 /**
- * During PRE_START, cancels damage dealt by a player to any non-player entity.
- * Player-vs-player damage is unaffected (handled separately by Invulnerable component).
+ * During lobby (WAITING/VOTING) and starting (PRE_START), cancels all damage
+ * dealt by a player — to other players, mobs, or any entity.
+ * Players are already protected from incoming damage by the Invulnerable component;
+ * this system covers the outgoing side and mobs.
  *
  * Registered via HungerGames.getEntityStoreRegistry().registerSystem(new EntityDamageSystem(gameManager)).
  */
@@ -34,15 +36,12 @@ public class EntityDamageSystem extends DamageEventSystem {
     @Override
     public void handle(int entityIndex, ArchetypeChunk<EntityStore> chunk, Store<EntityStore> store,
                        CommandBuffer<EntityStore> commandBuffer, Damage event) {
-        if (gameManager.getState() != GameState.PRE_START) return;
+        GameState state = gameManager.getState();
+        if (state != GameState.WAITING && state != GameState.VOTING && state != GameState.PRE_START) return;
 
-        // Attacker must be a player entity.
+        // Cancel all damage where the source is a player.
         if (!(event.getSource() instanceof Damage.EntitySource src)) return;
         if (store.getComponent(src.getRef(), Player.getComponentType()) == null) return;
-
-        // Target must not be a player entity.
-        Ref<EntityStore> targetRef = chunk.getReferenceTo(entityIndex);
-        if (store.getComponent(targetRef, Player.getComponentType()) != null) return;
 
         event.setCancelled(true);
     }

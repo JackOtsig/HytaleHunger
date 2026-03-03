@@ -171,13 +171,16 @@ public class GameManager {
         HungerGames.LOGGER.atInfo().log("Entering ACTIVE with " + aliveCount.get() + " players");
     }
 
-    private void transitionToEnded(PlayerData winner) {
+    private void transitionToEnded(PlayerData winner, Store<EntityStore> store) {
         state = GameState.ENDED;
         endedSecondsLeft = GameConstants.END_RESET_DELAY_SECONDS;
 
         String winnerName = null;
         if (winner != null) {
             winnerName = winner.getDisplayName();
+            // Make the winner invulnerable so they can't be hurt during the end phase.
+            store.addComponent(winner.getPlayer().getReference(),
+                    Invulnerable.getComponentType(), Invulnerable.INSTANCE);
             broadcast("§6" + winnerName + " §ewins the Hunger Games with "
                     + winner.getKills() + " kill(s)!");
         } else {
@@ -300,21 +303,21 @@ public class GameManager {
         }
 
         setSpectator(victimRef, store);
-        checkWinCondition();
+        checkWinCondition(store);
     }
 
     // ── Win condition ─────────────────────────────────────────────────────────
 
-    private void checkWinCondition() {
+    private void checkWinCondition(Store<EntityStore> store) {
         if (state != GameState.ACTIVE) return;
         if (adminMode) return; // admin is testing — don't auto-end on low player count
 
         int alive = aliveCount.get();
         if (alive == 1) {
             PlayerData winner = getAlivePlayers().stream().findFirst().orElse(null);
-            transitionToEnded(winner);
+            transitionToEnded(winner, store);
         } else if (alive == 0) {
-            transitionToEnded(null);
+            transitionToEnded(null, store);
         }
     }
 
@@ -333,6 +336,10 @@ public class GameManager {
                 Store<EntityStore> store = es.getStore();
                 for (Ref<EntityStore> ref : refs) {
                     Player.setGameMode(ref, GameMode.Adventure, store);
+                    // Re-apply lobby protection: Invulnerable so players can't be harmed.
+                    store.removeComponentIfExists(ref, Invulnerable.getComponentType());
+                    store.addComponent(ref, Invulnerable.getComponentType(), Invulnerable.INSTANCE);
+                    teleportToCornucopia(ref, store);
                 }
             });
         }
