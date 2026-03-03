@@ -441,6 +441,7 @@ public class GameManager {
                 } else {
                     store.removeComponentIfExists(ref, Frozen.getComponentType());
                     store.removeComponentIfExists(ref, Invulnerable.getComponentType());
+                    // Adventure = combat-enabled mode (Hytale has no Survival).
                     Player.setGameMode(ref, GameMode.Adventure, store);
                     scoreboardManager.addPlayer(pd, store);
                 }

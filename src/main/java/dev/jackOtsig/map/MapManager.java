@@ -55,15 +55,18 @@ public class MapManager {
         if (entityStore == null) return;
         List<PlayerData> list = List.copyOf(playerDatas);
         int count = list.size();
-        Store<EntityStore> store = entityStore.getStore();
-        for (int i = 0; i < count; i++) {
-            double angle = (2 * Math.PI * i) / count;
-            double x = GameConstants.CENTER_X + GameConstants.SPAWN_RING_RADIUS * Math.sin(angle);
-            double z = GameConstants.CENTER_Z + GameConstants.SPAWN_RING_RADIUS * Math.cos(angle);
-            // Yaw so the player faces the center (y = yaw in Vector3f).
-            float yaw = (float) Math.toDegrees(Math.atan2(Math.sin(angle), -Math.cos(angle)));
-            teleportPlayer(list.get(i).getPlayer(), x, GameConstants.CENTER_Y, z, yaw, store);
-        }
+        if (count == 0) return;
+        entityStore.getWorld().execute(() -> {
+            Store<EntityStore> store = entityStore.getStore();
+            for (int i = 0; i < count; i++) {
+                double angle = (2 * Math.PI * i) / count;
+                double x = GameConstants.CENTER_X + GameConstants.SPAWN_RING_RADIUS * Math.sin(angle);
+                double z = GameConstants.CENTER_Z + GameConstants.SPAWN_RING_RADIUS * Math.cos(angle);
+                // Yaw so the player faces the center (y = yaw in Vector3f).
+                float yaw = (float) Math.toDegrees(Math.atan2(Math.sin(angle), -Math.cos(angle)));
+                teleportPlayer(list.get(i).getPlayer(), x, GameConstants.CENTER_Y, z, yaw, store);
+            }
+        });
     }
 
     /** Spawns CORNUCOPIA_CHEST_COUNT chests in a tight cluster at the center. */
