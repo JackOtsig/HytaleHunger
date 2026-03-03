@@ -18,6 +18,7 @@ import dev.jackOtsig.PlayerData;
 import dev.jackOtsig.loot.ItemTier;
 import dev.jackOtsig.loot.LootTable;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Random;
@@ -28,28 +29,26 @@ import java.util.Random;
 public class MapManager {
 
     /** Block type key for field chests (small crude chest). */
-    private static final String CHEST_FIELD       = "Furniture_Crude_Chest_Small";
+    private static final String CHEST_FIELD      = "Furniture_Crude_Chest_Small";
     /** Block type key for cornucopia chests (large epic chest). */
-    private static final String CHEST_CORNUCOPIA  = "Furniture_Dungeon_Chest_Epic";
+    private static final String CHEST_CORNUCOPIA = "Furniture_Dungeon_Chest_Epic";
 
     private static final Random RNG = new Random();
 
     private final LootTable lootTable = new LootTable();
 
+    /** Pre-calculated data for a single chest placement. */
+    private record ChestSpec(int bx, int by, int bz, String blockTypeKey, List<String> itemIds) {}
+
     /**
      * No-op — the map is hand-built in the world editor.
      * Use /setcenter while standing at the cornucopia to set the origin before each game.
-     * All chest placement, spawn ring, and barrier calculations read from
-     * {@link GameConstants#CENTER_X}/{@link GameConstants#CENTER_Y}/{@link GameConstants#CENTER_Z}.
      */
     public void generateMap() {}
 
     /**
      * Teleports each player to an evenly-spaced position on the spawn ring,
-     * facing the cornucopia at the center.
-     *
-     * @param entityStore the world's EntityStore; may be null if the world has not
-     *                    started yet, in which case teleports are skipped.
+     * facing the cornucopia at the center. Runs on the world thread.
      */
     public void placeSpawnPositions(Collection<PlayerData> playerDatas, EntityStore entityStore) {
         if (entityStore == null) return;
@@ -62,90 +61,95 @@ public class MapManager {
                 double angle = (2 * Math.PI * i) / count;
                 double x = GameConstants.CENTER_X + GameConstants.SPAWN_RING_RADIUS * Math.sin(angle);
                 double z = GameConstants.CENTER_Z + GameConstants.SPAWN_RING_RADIUS * Math.cos(angle);
-                // Yaw so the player faces the center (y = yaw in Vector3f).
                 float yaw = (float) Math.toDegrees(Math.atan2(Math.sin(angle), -Math.cos(angle)));
                 teleportPlayer(list.get(i).getPlayer(), x, GameConstants.CENTER_Y, z, yaw, store);
             }
         });
     }
 
-    /** Spawns CORNUCOPIA_CHEST_COUNT chests in a tight cluster at the center. */
+    /**
+     * Spawns CORNUCOPIA_CHEST_COUNT chests in a tight cluster at the center.
+     * All placements run in a single world.execute() call to avoid flooding the world thread.
+     */
     public void spawnCornucopiaChests(EntityStore entityStore) {
         if (entityStore == null) return;
+        List<ChestSpec> specs = new ArrayList<>(GameConstants.CORNUCOPIA_CHEST_COUNT);
         for (int i = 0; i < GameConstants.CORNUCOPIA_CHEST_COUNT; i++) {
             double ox = (RNG.nextDouble() * 6) - 3;
             double oz = (RNG.nextDouble() * 6) - 3;
-            List<String> items = lootTable.rollChest(ItemTier.CORNUCOPIA);
-            spawnChest(GameConstants.CENTER_X + ox, GameConstants.CENTER_Y,
-                       GameConstants.CENTER_Z + oz, CHEST_CORNUCOPIA, items, entityStore);
+            specs.add(new ChestSpec(
+                    (int) Math.floor(GameConstants.CENTER_X + ox),
+                    (int) Math.floor(GameConstants.CENTER_Y),
+                    (int) Math.floor(GameConstants.CENTER_Z + oz),
+                    CHEST_CORNUCOPIA,
+                    lootTable.rollChest(ItemTier.CORNUCOPIA)));
         }
+        entityStore.getWorld().execute(() -> {
+            for (ChestSpec spec : specs) placeChest(spec, entityStore.getWorld());
+        });
     }
 
-    /** Spawns FIELD_CHEST_COUNT chests randomly across the map. */
+    /**
+     * Spawns FIELD_CHEST_COUNT chests randomly across the map.
+     * All placements run in a single world.execute() call to avoid flooding the world thread.
+     */
     public void spawnFieldChests(EntityStore entityStore) {
         if (entityStore == null) return;
         double r = GameConstants.INITIAL_BORDER_RADIUS;
+        List<ChestSpec> specs = new ArrayList<>(GameConstants.FIELD_CHEST_COUNT);
         for (int i = 0; i < GameConstants.FIELD_CHEST_COUNT; i++) {
             double angle = RNG.nextDouble() * 2 * Math.PI;
             double dist  = Math.sqrt(RNG.nextDouble()) * r;
             double x = GameConstants.CENTER_X + dist * Math.cos(angle);
             double z = GameConstants.CENTER_Z + dist * Math.sin(angle);
-            List<String> items = lootTable.rollChest(ItemTier.FIELD);
-            spawnChest(x, GameConstants.CENTER_Y, z, CHEST_FIELD, items, entityStore);
+            specs.add(new ChestSpec(
+                    (int) Math.floor(x),
+                    (int) Math.floor(GameConstants.CENTER_Y),
+                    (int) Math.floor(z),
+                    CHEST_FIELD,
+                    lootTable.rollChest(ItemTier.FIELD)));
         }
+        entityStore.getWorld().execute(() -> {
+            for (ChestSpec spec : specs) placeChest(spec, entityStore.getWorld());
+        });
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private void teleportPlayer(Player player, double x, double y, double z, float yaw,
-                                 Store<EntityStore> store) {
-        // Teleport API:
-        //   new Teleport(Vector3d pos, Vector3f rotation) — rotation: x=pitch, y=yaw, z=roll
-        //   PendingTeleport.queueTeleport(Teleport) queues it on the entity.
+                                Store<EntityStore> store) {
         PendingTeleport pt = store.getComponent(
                 player.getReference(),
                 PendingTeleport.getComponentType());
-        if (pt == null) return;
+        if (pt == null) {
+            HungerGames.LOGGER.atWarning().log(
+                    "teleportPlayer: PendingTeleport is null for " + player.getDisplayName()
+                    + " — teleport skipped");
+            return;
+        }
         pt.queueTeleport(new Teleport(
                 new Vector3d(x, y, z),
-                new Vector3f(0, yaw, 0)));  // pitch=0, yaw=yaw, roll=0
+                new Vector3f(0, yaw, 0)));
     }
 
-    /**
-     * Places a chest block at (x, y, z) and fills it with the given items.
-     * Block ops run on the world thread via {@code world.execute()}.
-     *
-     * @param blockTypeKey {@link #CHEST_FIELD} or {@link #CHEST_CORNUCOPIA}
-     * @param itemIds      item ID strings from {@code LootTable.rollChest()}
-     */
-    private void spawnChest(double x, double y, double z,
-                             String blockTypeKey, List<String> itemIds,
-                             EntityStore entityStore) {
-        int bx = (int) Math.floor(x);
-        int by = (int) Math.floor(y);
-        int bz = (int) Math.floor(z);
+    /** Places one chest block and fills it with loot. Must be called on the world thread. */
+    private void placeChest(ChestSpec spec, World world) {
+        world.setBlock(spec.bx(), spec.by(), spec.bz(), spec.blockTypeKey(), 0);
 
-        entityStore.getWorld().execute(() -> {
-            World world = entityStore.getWorld();
+        if (!(world.getChunk(ChunkUtil.indexChunkFromBlock(spec.bx(), spec.bz()))
+                     .getState(spec.bx(), spec.by(), spec.bz()) instanceof ItemContainerState ics)) {
+            HungerGames.LOGGER.atWarning().log(
+                    "spawnChest: no ItemContainerState at "
+                    + spec.bx() + "," + spec.by() + "," + spec.bz()
+                    + " for block " + spec.blockTypeKey());
+            return;
+        }
 
-            // Place the chest block (rotation 0 = default facing).
-            world.setBlock(bx, by, bz, blockTypeKey, 0);
-
-            // Retrieve the block state via the chunk (BlockAccessor.getState is non-deprecated).
-            if (!(world.getChunk(ChunkUtil.indexChunkFromBlock(bx, bz))
-                         .getState(bx, by, bz) instanceof ItemContainerState ics)) {
-                HungerGames.LOGGER.atWarning().log(
-                        "spawnChest: no ItemContainerState at " + bx + "," + by + "," + bz
-                        + " for block " + blockTypeKey);
-                return;
-            }
-
-            // Build a fresh container and fill each slot.
-            SimpleItemContainer container = new SimpleItemContainer((short) itemIds.size());
-            for (int i = 0; i < itemIds.size(); i++) {
-                container.setItemStackForSlot((short) i, new ItemStack(itemIds.get(i), 1), false);
-            }
-            ics.setItemContainer(container);
-        });
+        List<String> itemIds = spec.itemIds();
+        SimpleItemContainer container = new SimpleItemContainer((short) itemIds.size());
+        for (int i = 0; i < itemIds.size(); i++) {
+            container.setItemStackForSlot((short) i, new ItemStack(itemIds.get(i), 1), false);
+        }
+        ics.setItemContainer(container);
     }
 }
