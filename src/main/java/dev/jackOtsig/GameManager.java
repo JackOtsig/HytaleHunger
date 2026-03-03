@@ -2,12 +2,16 @@ package dev.jackOtsig;
 
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.math.vector.Vector3d;
+import com.hypixel.hytale.math.vector.Vector3f;
 import com.hypixel.hytale.protocol.GameMode;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.Frozen;
 import com.hypixel.hytale.server.core.entity.UUIDComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.Invulnerable;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.modules.entity.teleport.PendingTeleport;
+import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.jackOtsig.map.MapManager;
@@ -228,8 +232,11 @@ public class GameManager {
             EntityStore es = this.entityStore;
             if (es != null) {
                 Ref<EntityStore> ref = player.getReference();
-                es.getWorld().execute(() ->
-                        Player.setGameMode(ref, GameMode.Creative, es.getStore()));
+                es.getWorld().execute(() -> {
+                    Store<EntityStore> store = es.getStore();
+                    Player.setGameMode(ref, GameMode.Creative, store);
+                    teleportToCornucopia(ref, store);
+                });
             }
             return;
         }
@@ -240,7 +247,7 @@ public class GameManager {
         players.put(id, pd);
         aliveCount.incrementAndGet();
 
-        // Set Adventure mode and make invulnerable until the game starts.
+        // Set Adventure mode, make invulnerable, and teleport to the cornucopia.
         EntityStore es = this.entityStore;
         if (es != null) {
             Ref<EntityStore> ref = player.getReference();
@@ -248,6 +255,7 @@ public class GameManager {
                 Store<EntityStore> store = es.getStore();
                 Player.setGameMode(ref, GameMode.Adventure, store);
                 store.addComponent(ref, Invulnerable.getComponentType(), Invulnerable.INSTANCE);
+                teleportToCornucopia(ref, store);
             });
         }
         broadcast(player.getDisplayName() + " joined! ("
@@ -452,5 +460,20 @@ public class GameManager {
                 }
             }
         });
+    }
+
+    /**
+     * Teleports a player to the cornucopia position.
+     * Must be called on the world thread (inside world.execute()).
+     */
+    private void teleportToCornucopia(Ref<EntityStore> ref, Store<EntityStore> store) {
+        PendingTeleport pt = store.getComponent(ref, PendingTeleport.getComponentType());
+        if (pt == null) {
+            pt = new PendingTeleport();
+            store.addComponent(ref, PendingTeleport.getComponentType(), pt);
+        }
+        pt.queueTeleport(new Teleport(
+                new Vector3d(GameConstants.CENTER_X, GameConstants.CENTER_Y, GameConstants.CENTER_Z),
+                new Vector3f(0, 0, 0)));
     }
 }
