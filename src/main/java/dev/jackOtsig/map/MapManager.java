@@ -10,6 +10,7 @@ import com.hypixel.hytale.server.core.inventory.container.SimpleItemContainer;
 import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
 import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.chunk.WorldChunk;
 import com.hypixel.hytale.server.core.universe.world.meta.state.ItemContainerState;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.jackOtsig.GameConstants;
@@ -57,12 +58,14 @@ public class MapManager {
         if (count == 0) return;
         entityStore.getWorld().execute(() -> {
             Store<EntityStore> store = entityStore.getStore();
+            World world = entityStore.getWorld();
             for (int i = 0; i < count; i++) {
                 double angle = (2 * Math.PI * i) / count;
                 double x = GameConstants.CENTER_X + GameConstants.SPAWN_RING_RADIUS * Math.sin(angle);
                 double z = GameConstants.CENTER_Z + GameConstants.SPAWN_RING_RADIUS * Math.cos(angle);
                 float yaw = (float) Math.toDegrees(Math.atan2(Math.sin(angle), -Math.cos(angle)));
-                teleportPlayer(list.get(i).getPlayer(), x, GameConstants.CENTER_Y, z, yaw, store);
+                double y = findSurfaceY(world, (int) Math.floor(x), (int) Math.floor(z));
+                teleportPlayer(list.get(i).getPlayer(), x, y, z, yaw, store);
             }
         });
     }
@@ -121,6 +124,16 @@ public class MapManager {
         Ref<EntityStore> ref = player.getReference();
         store.putComponent(ref, Teleport.getComponentType(),
                 new Teleport(new Vector3d(x, y, z), new Vector3f(0, yaw, 0)));
+    }
+
+    /**
+     * Returns the Y coordinate a player should stand at for the given world-space (bx, bz).
+     * Uses the chunk heightmap (+1 so the player is above the top solid block).
+     * Falls back to CENTER_Y if the chunk is not loaded.
+     */
+    public static double findSurfaceY(World world, int bx, int bz) {
+        WorldChunk chunk = world.getChunk(ChunkUtil.indexChunkFromBlock(bx, bz));
+        return chunk != null ? chunk.getHeight(bx, bz) + 1.0 : GameConstants.CENTER_Y;
     }
 
     /** Places one chest block and fills it with loot. Must be called on the world thread. */

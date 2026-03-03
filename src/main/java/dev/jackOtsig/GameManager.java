@@ -11,6 +11,7 @@ import com.hypixel.hytale.server.core.entity.UUIDComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.Invulnerable;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
+import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import dev.jackOtsig.map.MapManager;
@@ -473,9 +474,13 @@ public class GameManager {
      * Must be called on the world thread (inside world.execute()).
      */
     private void teleportToCornucopia(Ref<EntityStore> ref, Store<EntityStore> store) {
+        double y = MapManager.findSurfaceY(
+                store.getExternalData().getWorld(),
+                (int) Math.floor(GameConstants.CENTER_X),
+                (int) Math.floor(GameConstants.CENTER_Z));
         store.putComponent(ref, Teleport.getComponentType(),
                 new Teleport(
-                        new Vector3d(GameConstants.CENTER_X, GameConstants.CENTER_Y, GameConstants.CENTER_Z),
+                        new Vector3d(GameConstants.CENTER_X, y, GameConstants.CENTER_Z),
                         new Vector3f(0, 0, 0)));
     }
 }
