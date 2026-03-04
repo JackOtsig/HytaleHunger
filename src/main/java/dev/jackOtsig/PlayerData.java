@@ -1,5 +1,6 @@
 package dev.jackOtsig;
 
+import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 
 /** Holds per-player state for the duration of a game. */
@@ -9,6 +10,10 @@ public class PlayerData {
     private int kills;
     private boolean alive;
     private int secondsOutsideBorder;
+
+    /** Ring position assigned during PRE_START. Null outside PRE_START. */
+    private Vector3d frozenPos;
+    private float frozenYaw;
 
     public PlayerData(Player player) {
         this.player = player;
@@ -29,4 +34,9 @@ public class PlayerData {
     public int getSecondsOutsideBorder() { return secondsOutsideBorder; }
     public void incrementSecondsOutsideBorder() { secondsOutsideBorder++; }
     public void resetSecondsOutsideBorder() { secondsOutsideBorder = 0; }
+
+    public void setFrozenPos(Vector3d pos, float yaw) { this.frozenPos = pos; this.frozenYaw = yaw; }
+    public Vector3d getFrozenPos() { return frozenPos; }
+    public float getFrozenYaw() { return frozenYaw; }
+    public void clearFrozenPos() { frozenPos = null; frozenYaw = 0; }
 }

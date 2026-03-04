@@ -65,7 +65,9 @@ public class MapManager {
                 double z = GameConstants.CENTER_Z + GameConstants.SPAWN_RING_RADIUS * Math.cos(angle);
                 float yaw = (float) Math.toDegrees(Math.atan2(Math.sin(angle), -Math.cos(angle)));
                 double y = findSurfaceY(world, (int) Math.floor(x), (int) Math.floor(z));
-                teleportPlayer(list.get(i).getPlayer(), x, y, z, yaw, store);
+                PlayerData pd = list.get(i);
+                pd.setFrozenPos(new Vector3d(x, y, z), yaw);
+                teleportPlayer(pd.getPlayer(), x, y, z, yaw, store);
             }
         });
     }

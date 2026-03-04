@@ -6,10 +6,10 @@ import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.math.vector.Vector3f;
 import com.hypixel.hytale.protocol.GameMode;
 import com.hypixel.hytale.server.core.Message;
-import com.hypixel.hytale.server.core.entity.Frozen;
 import com.hypixel.hytale.server.core.entity.UUIDComponent;
 import com.hypixel.hytale.server.core.entity.effect.EffectControllerComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.Invulnerable;
+import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.DeathComponent;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
@@ -183,7 +183,6 @@ public class GameManager {
         mapManager.placeSpawnPositions(players.values(), entityStore);
         mapManager.spawnCornucopiaChests(entityStore);
         mapManager.spawnFieldChests(entityStore);
-        freezeAllPlayers(true);
         broadcast("All players have been teleported! Game begins in "
                 + preStartSecondsLeft + " seconds!");
         HungerGames.LOGGER.atInfo().log("Entering PRE_START");
@@ -193,8 +192,8 @@ public class GameManager {
         state = GameState.ACTIVE;
         activeSeconds = 0;
         barrierManager.reset();
-        // HUD setup and unfreeze both run on the world thread inside freezeAllPlayers(false).
-        freezeAllPlayers(false);
+        // HUD setup and player activation run on the world thread inside activateAllPlayers().
+        activateAllPlayers();
         broadcast("The Hunger Games have begun! May the odds be ever in your favor.");
         HungerGames.LOGGER.atInfo().log("Entering ACTIVE with " + aliveCount.get() + " players");
     }
@@ -234,8 +233,31 @@ public class GameManager {
         preStartSecondsLeft--;
         if (preStartSecondsLeft <= 0) {
             transitionToActive();
-        } else if (preStartSecondsLeft <= 5) {
+            return;
+        }
+        if (preStartSecondsLeft <= 5) {
             broadcast("" + preStartSecondsLeft + "...");
+        }
+        // Re-teleport players to their ring positions each second to prevent movement.
+        // Frozen component is NPC-only and does not block player input; this is the
+        // reliable alternative.
+        EntityStore es = this.entityStore;
+        if (es != null) {
+            List<PlayerData> snapshot = List.copyOf(players.values());
+            es.getWorld().execute(() -> {
+                Store<EntityStore> store = es.getStore();
+                for (PlayerData pd : snapshot) {
+                    Vector3d pos = pd.getFrozenPos();
+                    if (pos == null) continue;
+                    Ref<EntityStore> ref = pd.getPlayer().getReference();
+                    // Preserve the player's current look direction so they can turn freely.
+                    TransformComponent tc = store.getComponent(ref, TransformComponent.getComponentType());
+                    Vector3f rotation = tc != null ? tc.getRotation()
+                                                   : new Vector3f(0, pd.getFrozenYaw(), 0);
+                    store.putComponent(ref, Teleport.getComponentType(),
+                            new Teleport(pos, rotation));
+                }
+            });
         }
     }
 
@@ -375,8 +397,6 @@ public class GameManager {
                 Store<EntityStore> store = es.getStore();
                 for (Ref<EntityStore> ref : refs) {
                     Player.setGameMode(ref, GameMode.Adventure, store);
-                    // Unfreeze in case the game is reset from PRE_START.
-                    store.removeComponentIfExists(ref, Frozen.getComponentType());
                     // Re-apply lobby protection: Invulnerable so players can't be harmed.
                     store.removeComponentIfExists(ref, Invulnerable.getComponentType());
                     store.addComponent(ref, Invulnerable.getComponentType(), Invulnerable.INSTANCE);
@@ -385,6 +405,8 @@ public class GameManager {
                 }
             });
         }
+        // Clear per-player ring positions set during PRE_START.
+        players.values().forEach(PlayerData::clearFrozenPos);
         players.clear();
         aliveCount.set(0);
         activeSeconds     = 0;
@@ -499,38 +521,27 @@ public class GameManager {
     }
 
     /**
-     * Freezes or unfreezes all players using the Frozen marker component.
-     * When unfreezing (game going ACTIVE), also removes Invulnerable and sets up HUDs.
+     * Transitions all players from PRE_START into ACTIVE:
+     * removes Invulnerable, sets Adventure mode, unlocks stats, and adds HUD.
      * Runs via world.execute() because it's called from the scheduler thread.
      */
-    private void freezeAllPlayers(boolean freeze) {
+    private void activateAllPlayers() {
         EntityStore es = this.entityStore;
         if (es == null) return;
         es.getWorld().execute(() -> {
             Store<EntityStore> store = es.getStore();
             for (PlayerData pd : players.values()) {
                 Ref<EntityStore> ref = pd.getPlayer().getReference();
-                if (freeze) {
-                    // removeComponentIfExists first: Hytale may already have Frozen on the
-                    // entity (e.g. applied during initial spawn). addComponent throws if the
-                    // component is already present, which would corrupt ECS archetype state
-                    // and cascade into an NPC-system IndexOutOfBoundsException world crash.
-                    store.removeComponentIfExists(ref, Frozen.getComponentType());
-                    store.addComponent(ref, Frozen.getComponentType(), Frozen.get());
-                } else {
-                    String name = pd.getDisplayName();
-                    HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: removing Frozen");
-                    store.removeComponentIfExists(ref, Frozen.getComponentType());
-                    HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: removing Invulnerable");
-                    store.removeComponentIfExists(ref, Invulnerable.getComponentType());
-                    HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: setting Adventure mode");
-                    Player.setGameMode(ref, GameMode.Adventure, store);
-                    HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: unlocking and maximizing stats");
-                    unlockAndMaximizeStats(ref, store);
-                    HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: adding HUD");
-                    scoreboardManager.addPlayer(pd, store);
-                    HungerGames.LOGGER.atInfo().log("unfreeze [" + name + "]: done");
-                }
+                String name = pd.getDisplayName();
+                HungerGames.LOGGER.atInfo().log("activate [" + name + "]: removing Invulnerable");
+                store.removeComponentIfExists(ref, Invulnerable.getComponentType());
+                HungerGames.LOGGER.atInfo().log("activate [" + name + "]: setting Adventure mode");
+                Player.setGameMode(ref, GameMode.Adventure, store);
+                HungerGames.LOGGER.atInfo().log("activate [" + name + "]: unlocking and maximizing stats");
+                unlockAndMaximizeStats(ref, store);
+                HungerGames.LOGGER.atInfo().log("activate [" + name + "]: adding HUD");
+                scoreboardManager.addPlayer(pd, store);
+                HungerGames.LOGGER.atInfo().log("activate [" + name + "]: done");
             }
         });
     }
