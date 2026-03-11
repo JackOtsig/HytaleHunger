@@ -11,7 +11,7 @@
     }
   ],
   "Website": "https://github.com/JackOtsig",
-  "ServerVersion": "0.1",
+  "ServerVersion": "*",
   "Dependencies": {},
   "OptionalDependencies": {},
   "DisabledByDefault": false,
